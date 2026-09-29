@@ -116,19 +116,26 @@ cat >"$SLOW_STEAL" <<'EOF'
 . "$AR_ENGINE"
 ar_lock_mtime_real() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || printf '%s' "$2"; }
 ar_lock_mtime() {
-  case $1 in *.stale.*) sleep "${AR_LOCK_SLOW_WAIT:-1}" ;; esac
+  case $1 in *.stale.*) : >"$AR_LOCK_SLOW_READY"; sleep "${AR_LOCK_SLOW_WAIT:-1}" ;; esac
   ar_lock_mtime_real "$@"
 }
 ar_lock && printf 'won\n' >>"$AR_WINNERS"
 EOF
 chmod +x "$SLOW_STEAL"
 export AR_LOCK_SLOW_WAIT=1
+export AR_LOCK_SLOW_READY="$SB/slowsteal.ready"
 
 stale_lock
 export AR_WINNERS="$SB/winners.third"
 : >"$AR_WINNERS"
 "$SLOW_STEAL" &                # moves the stale lock aside, then stalls
-sleep 0.3
+_ready_tries=0
+while [ ! -f "$AR_LOCK_SLOW_READY" ] && [ "$_ready_tries" -lt 100 ]; do
+  sleep 0.02
+  _ready_tries=$(( _ready_tries + 1 ))
+done
+check "the stealer reached its reserved lock" "yes" \
+  "$([ -f "$AR_LOCK_SLOW_READY" ] && printf yes || printf no)"
 ar_lock; third_rc=$?           # the third contender, arriving inside that stall
 wait
 check_rc "a contender cannot take the path mid-steal" 1 "$third_rc"
@@ -143,7 +150,7 @@ rm -f "$LOCK_DIR/owner"
 check "so the lock can still be released" "no" \
   "$(rmdir "$LOCK_DIR" 2>/dev/null; [ -d "$LOCK_DIR" ] && printf yes || printf no)"
 check "and no moved-aside copy survives" "no" "$(residue)"
-unset AR_LOCK_SLOW_WAIT
+unset AR_LOCK_SLOW_WAIT AR_LOCK_SLOW_READY
 
 # ======================================================================
 # A steal whose victim exits mid-handoff leaves a lock that ages out.
