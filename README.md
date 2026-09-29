@@ -1,6 +1,6 @@
 # herdr-automatic-rename
 
-[![tests](https://github.com/qu8n/herdr-automatic-rename/actions/workflows/ci.yml/badge.svg)](https://github.com/qu8n/herdr-automatic-rename/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/qu8n/herdr-automatic-rename)](https://github.com/qu8n/herdr-automatic-rename/releases) [![herdr](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqu8n%2Fherdr-automatic-rename%2Fmain%2Fherdr-plugin.toml&query=%24.min_herdr_version&prefix=%3E%3D%20&label=herdr)](https://github.com/qu8n/herdr) [![license](https://img.shields.io/github/license/qu8n/herdr-automatic-rename)](LICENSE)
+[![tests](https://github.com/nanoboom/herdr-automatic-rename/actions/workflows/ci.yml/badge.svg)](https://github.com/nanoboom/herdr-automatic-rename/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/release/nanoboom/herdr-automatic-rename)](https://github.com/nanoboom/herdr-automatic-rename/releases) [![herdr](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnanoboom%2Fherdr-automatic-rename%2Fmain%2Fherdr-plugin.toml&query=%24.min_herdr_version&prefix=%3E%3D%20&label=herdr)](https://github.com/qu8n/herdr) [![license](https://img.shields.io/github/license/nanoboom/herdr-automatic-rename)](LICENSE)
 
 ## Features
 
@@ -30,7 +30,7 @@ The label uses only the final folder name, plus the existing jump-key number whe
 ### Install or update
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/qu8n/herdr-automatic-rename/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nanoboom/herdr-automatic-rename/main/install.sh | bash
 ```
 
 This script installs the latest version of the plugin and adds our shell hook, which makes the renaming mechanism happen immediately when a command starts. It picks the hook for your login shell out of zsh, bash, and fish, and writes it to that shell's startup file.
@@ -41,7 +41,7 @@ This script installs the latest version of the plugin and adds our shell hook, w
 #### 1. Install the plugin
 
 ```sh
-herdr plugin install qu8n/herdr-automatic-rename --yes
+herdr plugin install nanoboom/herdr-automatic-rename --yes
 ```
 
 #### 2. Add the hook for your shell

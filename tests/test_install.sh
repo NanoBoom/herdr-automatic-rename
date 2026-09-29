@@ -57,7 +57,7 @@ check_contains "curled zsh: globs the managed dir under \$HOME" "$(cat "$rc_file
   '$HOME/.config/herdr/plugins/github/herdr-automatic-rename-*/shell/hook.zsh(N)'
 check_absent "curled zsh: no resolved sandbox path" "$(cat "$rc_file")" "$SB"
 check_contains "curled: installs the plugin" "$(cat "$SB/herdr.log")" \
-  "plugin install qu8n/herdr-automatic-rename --yes"
+  "plugin install nanoboom/herdr-automatic-rename --yes"
 
 # zsh parses what we wrote (the whole point of the (N) qualifier).
 if command -v zsh >/dev/null 2>&1; then

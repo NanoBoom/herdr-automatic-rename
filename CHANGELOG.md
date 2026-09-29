@@ -32,7 +32,7 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
   `clear` hands back the derived name too, where it used to strip the number off the rewrite and leave that standing. It is documented as the last step before uninstall, after which the plugin that could have restored the label is gone.
 
-  Based on [#15](https://github.com/qu8n/herdr-automatic-rename/pull/15) by @engineersamuel.
+  Based on [#15](https://github.com/nanoboom/herdr-automatic-rename/pull/15) by @engineersamuel.
 
 ## [0.10.0] - 2026-09-10
 
@@ -94,17 +94,17 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
 ### Fixed
 
-- The workspace name follows the shell's directory ([#20](https://github.com/qu8n/herdr-automatic-rename/issues/20)). A `cd` emits no herdr event, so a workspace kept the name of the directory it was created in until something unrelated woke the plugin, while the tab beside it moved at the next prompt. The shell hook is the one thing that does fire on a cd, and it renamed only the tab.
+- The workspace name follows the shell's directory ([#20](https://github.com/nanoboom/herdr-automatic-rename/issues/20)). A `cd` emits no herdr event, so a workspace kept the name of the directory it was created in until something unrelated woke the plugin, while the tab beside it moved at the next prompt. The shell hook is the one thing that does fire on a cd, and it renamed only the tab.
 
   It now names the workspace from the same prompt, by the rules the reconcile uses: the directory is the shell's own `$PWD`, the base is the repository that directory belongs to or the directory itself, and a workspace somebody named by hand is numbered and nothing else. A quiet prompt costs one state read and no herdr call, since the base we own is recorded and only a cd that leaves the project has anything to ask. A workspace the plugin has not adopted is left to the next event, adopting one meaning a round-trip on every prompt.
 
   Only the tab the workspace is on moves it, since herdr tracks a workspace's directory through its active pane and a prompt drawn in a background tab is about somewhere else. Panes with no shell hook installed are unchanged, and so is the five-second wait for herdr to persist a brand-new workspace.
 
-- One `PROGRAM_ALIASES` entry now names an agent however it was installed ([#19](https://github.com/qu8n/herdr-automatic-rename/issues/19)). Two agents answer to two names, `cursor-agent`, which herdr calls `cursor`, and `kiro-cli`, which it calls `kiro`, and which of the two reaches naming says only how the agent was installed. A native install arrives as its own executable, an npm-fronted one as the kind herdr detected behind the runtime. Keyed by exact name, one config labelled the two panes differently: `cu` where the alias matched, `cursor` where it did not.
+- One `PROGRAM_ALIASES` entry now names an agent however it was installed ([#19](https://github.com/nanoboom/herdr-automatic-rename/issues/19)). Two agents answer to two names, `cursor-agent`, which herdr calls `cursor`, and `kiro-cli`, which it calls `kiro`, and which of the two reaches naming says only how the agent was installed. A native install arrives as its own executable, an npm-fronted one as the kind herdr detected behind the runtime. Keyed by exact name, one config labelled the two panes differently: `cu` where the alias matched, `cursor` where it did not.
 
   An alias is now looked up under both spellings, the exact name first, so a config naming each separately still gets each. The pair is read off the agent list that already carries both spellings rather than out of a second table somebody would have to keep in step with it.
 
-- Two herdr sessions no longer share one state store ([#22](https://github.com/qu8n/herdr-automatic-rename/issues/22)). Every server numbers its tabs from `w1:t1`, so the plugin running under `herdr --session work` and the one under `herdr --session home` wrote the same keys into the same `state.json`, and each full pass pruned the other session's tabs as closed. A tab whose record is gone reads as renamed by hand on the next pass and opts out of naming until reset, which is how a machine running more than one session ended up with every tab frozen on whatever it was called when the other session last ran, and the lock they also shared dropped events on top of that.
+- Two herdr sessions no longer share one state store ([#22](https://github.com/nanoboom/herdr-automatic-rename/issues/22)). Every server numbers its tabs from `w1:t1`, so the plugin running under `herdr --session work` and the one under `herdr --session home` wrote the same keys into the same `state.json`, and each full pass pruned the other session's tabs as closed. A tab whose record is gone reads as renamed by hand on the next pass and opts out of naming until reset, which is how a machine running more than one session ended up with every tab frozen on whatever it was called when the other session last ran, and the lock they also shared dropped events on top of that.
 
   A named session now keeps its store under `sessions/<name>/` inside the state directory, resolved the way the herdr CLI picks its server: from the session directory in the socket path herdr exports to plugin commands and pane environments alike, or from `HERDR_SESSION` when no socket path is set, so the herdr-invoked pass and the shell hooks resolve one file. The default session keeps the store where it always was.
 
@@ -130,7 +130,7 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
 ### Fixed
 
-- A numbered workspace goes on following its directory ([#13](https://github.com/qu8n/herdr-automatic-rename/issues/13)). herdr names a workspace after `identity_cwd`, its own tracked directory, and the first `workspace rename` freezes that name for good: herdr keeps the directory current and never labels from it again. Numbering a workspace pinned it to whatever it was called when it opened, and no smaller rename would have helped, because there is no rename that leaves the derivation alive.
+- A numbered workspace goes on following its directory ([#13](https://github.com/nanoboom/herdr-automatic-rename/issues/13)). herdr names a workspace after `identity_cwd`, its own tracked directory, and the first `workspace rename` freezes that name for good: herdr keeps the directory current and never labels from it again. Numbering a workspace pinned it to whatever it was called when it opened, and no smaller rename would have helped, because there is no rename that leaves the derivation alive.
 
   The base now comes from `identity_cwd`, read out of the `session.json` the collapse rules already read, and resolves to the repository the directory belongs to, or to the directory itself outside a repo. A pane moving around inside a project is not a rename; a pane that leaves takes the new name. Two caveats come with the file. The value is in no API response, and herdr saves it on a 5-second debounce, so a `cd` lands on the label an event or two later rather than instantly. An older herdr without the field keeps the previous behavior.
 
@@ -160,7 +160,7 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
 ### Fixed
 
-- An oh-my-pi tab showed the agent's spinner glyph and renamed itself on every status change. Most agents park a status glyph in front of the task and the existing strip takes it off; oh-my-pi puts its own brand there first and the glyph second: `π ⠋ Fix the parser` while it works, `π > Fix the parser` when the turn is yours, `π ! ...` when it wants you, `π: ...` with its title state off. The strip only takes a leading run of non-alphanumerics and jq reads the brand as a letter, so it stopped on character one and each state reached the tab as a different label ([#12](https://github.com/qu8n/herdr-automatic-rename/issues/12)).
+- An oh-my-pi tab showed the agent's spinner glyph and renamed itself on every status change. Most agents park a status glyph in front of the task and the existing strip takes it off; oh-my-pi puts its own brand there first and the glyph second: `π ⠋ Fix the parser` while it works, `π > Fix the parser` when the turn is yours, `π ! ...` when it wants you, `π: ...` with its title state off. The strip only takes a leading run of non-alphanumerics and jq reads the brand as a letter, so it stopped on character one and each state reached the tab as a different label ([#12](https://github.com/nanoboom/herdr-automatic-rename/issues/12)).
 
   `TITLE_BRANDS` names a brand per herdr agent kind (`pi` and `omp` by default, both the same program) and it comes off before the strip runs, at the very front only and only with a non-alphanumeric behind it, so `πcalc rewrite` keeps its first letter. Every state now reduces to the same label, so nothing renames on a status change. The reported case gets more than the glyph back: with no session title yet oh-my-pi labels itself after its directory, which the directory refusal already knew to hand to the program name. It just could not see it behind the brand.
 
@@ -241,7 +241,7 @@ Nothing changes for a config that names none of the new knobs. `AUTO_INDEX` stil
 
 ### Added
 
-- `AUTO_INDEX_WORKSPACES`, `AUTO_INDEX_TABS` and `AUTO_INDEX_AGENTS` split the `[N]` numbering by item kind ([#8](https://github.com/qu8n/herdr-automatic-rename/issues/8)). Each defaults to `AUTO_INDEX` and overrides it when set, so numbered tabs above plain workspace names is `AUTO_INDEX_WORKSPACES=0` on its own. Existing configs are unaffected.
+- `AUTO_INDEX_WORKSPACES`, `AUTO_INDEX_TABS` and `AUTO_INDEX_AGENTS` split the `[N]` numbering by item kind ([#8](https://github.com/nanoboom/herdr-automatic-rename/issues/8)). Each defaults to `AUTO_INDEX` and overrides it when set, so numbered tabs above plain workspace names is `AUTO_INDEX_WORKSPACES=0` on its own. Existing configs are unaffected.
 
 ### Changed
 
@@ -299,13 +299,13 @@ Catches up with herdr 0.7.5 and 0.8.0. `min_herdr_version` stays at `0.7.1`: a r
 
 ### Fixed
 
-- A wrapped program on NixOS takes its tab name from the command that was typed rather than the wrapper underneath it, so `nh os switch` reads `nh` instead of `.nh-wrapped` ([#6](https://github.com/qu8n/herdr-automatic-rename/issues/6)). `ar_pane_program` read the foreground program from `argv0` and fell back to `name`, but herdr only sends `argv0` on some platforms; its Linux builds send `argv`, `cmdline`, and `name` alone. Those panes therefore named themselves after `name`, which is the on-disk executable rather than the invocation, and on NixOS the executable behind a wrapped program is `.<prog>-wrapped`. `argv[0]` holds what was typed and is present either way, so it now sits between `argv0` and `name`. `name` was a poor last resort regardless: a `claude` pane reports its version string there.
+- A wrapped program on NixOS takes its tab name from the command that was typed rather than the wrapper underneath it, so `nh os switch` reads `nh` instead of `.nh-wrapped` ([#6](https://github.com/nanoboom/herdr-automatic-rename/issues/6)). `ar_pane_program` read the foreground program from `argv0` and fell back to `name`, but herdr only sends `argv0` on some platforms; its Linux builds send `argv`, `cmdline`, and `name` alone. Those panes therefore named themselves after `name`, which is the on-disk executable rather than the invocation, and on NixOS the executable behind a wrapped program is `.<prog>-wrapped`. `argv[0]` holds what was typed and is present either way, so it now sits between `argv0` and `name`. `name` was a poor last resort regardless: a `claude` pane reports its version string there.
 
 ## [0.2.2] - 2026-07-29
 
 ### Fixed
 
-- `ICONS_ENABLED=1` now actually prepends a Nerd Font glyph. Every arm of `ar_icon` shipped as `printf ''`, so the lookup always returned the empty string, the `[ -n "$ic" ]` guard in `ar_format` never passed, and all three `ICON_STYLE` modes did nothing. The glyphs were absent from `naming.sh` from its first commit, which means icons never worked in any release up to 0.2.1 ([#3](https://github.com/qu8n/herdr-automatic-rename/issues/3)). Each arm now carries its codepoint in a comment so a stripped glyph can be restored, and the tests assert the exact bytes rather than only checking that `ICON_STYLE=name` suppresses the glyph, which passed happily against an empty string.
+- `ICONS_ENABLED=1` now actually prepends a Nerd Font glyph. Every arm of `ar_icon` shipped as `printf ''`, so the lookup always returned the empty string, the `[ -n "$ic" ]` guard in `ar_format` never passed, and all three `ICON_STYLE` modes did nothing. The glyphs were absent from `naming.sh` from its first commit, which means icons never worked in any release up to 0.2.1 ([#3](https://github.com/nanoboom/herdr-automatic-rename/issues/3)). Each arm now carries its codepoint in a comment so a stripped glyph can be restored, and the tests assert the exact bytes rather than only checking that `ICON_STYLE=name` suppresses the glyph, which passed happily against an empty string.
 
 ## [0.2.1] - 2026-07-26
 
@@ -344,26 +344,26 @@ First public release.
 - Configuration via `~/.config/herdr-automatic-rename/config.sh` (or `$HERDR_AUTOMATIC_RENAME_CONFIG`), with a documented `config.example.sh`.
 - A self-contained test suite (bash + jq only) covering naming, prefix helpers, the state machine, the shell hooks, and a full reconcile against a fake herdr.
 
-[Unreleased]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.12.0...HEAD
-[0.12.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.11.1...v0.12.0
-[0.11.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.11.0...v0.11.1
-[0.11.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.9.1...v0.10.0
-[0.9.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.7.3...v0.8.0
-[0.7.3]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.7.2...v0.7.3
-[0.7.2]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.7.1...v0.7.2
-[0.7.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.6.1...v0.7.0
-[0.6.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.2.3...v0.3.0
-[0.2.3]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/qu8n/herdr-automatic-rename/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/qu8n/herdr-automatic-rename/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.11.1...v0.12.0
+[0.11.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.7.3...v0.8.0
+[0.7.3]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.2.3...v0.3.0
+[0.2.3]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/nanoboom/herdr-automatic-rename/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/nanoboom/herdr-automatic-rename/releases/tag/v0.1.0

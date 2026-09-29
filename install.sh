@@ -2,7 +2,7 @@
 # One command that installs the plugin and wires the shell hook, for whichever
 # of zsh, bash, and fish you actually use:
 #
-#   curl -fsSL https://raw.githubusercontent.com/qu8n/herdr-automatic-rename/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/nanoboom/herdr-automatic-rename/main/install.sh | bash
 #
 # Run it again any time: both halves are idempotent. Pass a shell name to wire a
 # shell other than your login one (`bash install.sh fish`), and set
@@ -13,7 +13,7 @@
 # is left to you, since herdr is the one that would own a second copy.
 set -eu
 
-REPO="qu8n/herdr-automatic-rename"
+REPO="nanoboom/herdr-automatic-rename"
 # The line that makes this idempotent: present in a startup file means the hook
 # is already wired, so a re-run touches nothing.
 MARKER="# herdr-automatic-rename: live tab naming hook"
