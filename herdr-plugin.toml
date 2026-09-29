@@ -8,7 +8,7 @@ version = "0.12.0"
 # runtime instead (see ar_agent_prefix_ok) and newer events are simply declared
 # below.
 min_herdr_version = "0.7.1"
-description = "Auto-name tabs after where the work is and what is running there -- the directory, the branch, the machine reached over ssh, then the program or the task an agent reports -- and/or prefix workspaces, tabs, and agents with their 1-9 jump-key number. Each feature toggles via config.sh."
+description = "Auto-name tabs after their project directory, or the current folder outside a project, and optionally prefix workspaces, tabs, and agents with their 1-9 jump-key number. Combined program, branch, and agent-title labels remain available through config.sh."
 platforms = ["linux", "macos"]
 
 # One unified reconcile handles both features, so every event runs the SAME
@@ -71,7 +71,7 @@ command = ["bash", "automatic-rename.sh", "worktree.opened"]
 on = "worktree.removed"
 command = ["bash", "automatic-rename.sh", "worktree.removed"]
 
-# --- Tabs: naming (foreground program) and numbering (cmd+N array order) ---
+# --- Tabs: project/folder naming and numbering (cmd+N array order) ---
 [[events]]
 on = "tab.created"
 command = ["bash", "automatic-rename.sh", "tab.created"]

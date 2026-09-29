@@ -209,6 +209,7 @@ check "the root store is never seeded onto itself" "nvim" \
 # fixtures, as each server answers for its own tabs, and both number from w1:t1.
 MOCK="$here/mocks/herdr"
 export HERDR_BIN_PATH="$MOCK" HERDR_MOCK_LOG="$SB/renames.log"
+export TAB_NAME_DIRECTORY_ONLY=0
 export HERDR_AUTOMATIC_RENAME_CONFIG="$SB/none.sh"   # absent -> env toggles win
 export HERDR_CONFIG_FILE="$SB/herdr.toml"
 printf 'agent_panel_sort = "spaces"\n' >"$HERDR_CONFIG_FILE"

@@ -62,6 +62,7 @@ check "no rules, no rewrite" "worktree-feature" "$(ar_ws_subst "worktree-feature
 # workspace renames alone. State is NOT sandboxed per scenario on purpose in the
 # multi-pass ones: ownership has to survive from one event to the next.
 setup() {
+  export TAB_NAME_DIRECTORY_ONLY=0
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-wscwd.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"

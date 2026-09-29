@@ -2,9 +2,8 @@
 #
 # herdr-automatic-rename - one plugin, two toggleable features:
 #
-#   NAME_TABS=1   auto-name each tab after its foreground program, or the shell
-#                 name at a bare prompt (manual renames opt a tab out). Applies
-#                 to tabs only.
+#   NAME_TABS=1   auto-name each tab after its project or current directory
+#                 (manual renames opt a tab out). Applies to tabs only.
 #   AUTO_INDEX=1  prefix each workspace, tab, and agent with the 1-9 number of
 #                 its jump keybind (switch_workspace/switch_tab/focus_agent) as
 #                 "[N] <base>". Per-scope overrides AUTO_INDEX_WORKSPACES,
@@ -1066,7 +1065,7 @@ ar_name_eligible() {
 }
 
 # ======================================================================
-# tab-name computation (herdr-touching; feeds ar_format from naming.sh)
+# tab-name computation (herdr-touching; directory or combined label)
 # ======================================================================
 
 # ar_resolve_pane <tab_id> <pane_count> <focused> <layout_pane> -> the active
@@ -1225,10 +1224,10 @@ ar_branch_of() {
 }
 
 # ar_tab_name <tab_id> <pane_count> <focused> <layout_pane> [workspace base]
-#   -> base name on stdout.
-# Returns 1 when the name can't be computed (no resolvable pane, process-info
-# failure); a successful HIDE_SHELL computation returns 0 with EMPTY output, so
-# the caller must read the status, not the string, to tell the two apart.
+#   -> base name on stdout. The default uses the resolved directory alone;
+# combined labels still use the agent title or foreground program when enabled.
+# Returns 1 when the pane or name cannot be resolved. A successful HIDE_SHELL
+# computation in combined mode returns 0 with empty output.
 ar_tab_name() {
   local pane info prog="" cmd="" title="" condensed=""
   pane=$(ar_resolve_pane "$1" "$2" "$3" "${4:-}")
@@ -1244,6 +1243,13 @@ ar_tab_name() {
     ar_pane_facts "$pane"
   else
     ar_trace "$1 pane $pane picked by the snapshot reshape"
+  fi
+  if [ "${TAB_NAME_DIRECTORY_ONLY:-1}" = "1" ]; then
+    ar_context_path "$AR_PANE_DIR"
+    ar_directory_name "$AR_CONTEXT_PATH" >/dev/null
+    [ -n "$AR_DIRECTORY_NAME" ] || return 1
+    printf '%s' "$AR_DIRECTORY_NAME"
+    return 0
   fi
   # An agent tab is named after the work the agent reports, when it reports any:
   # five claude tabs all read "claude" otherwise, which is the one thing naming
@@ -2452,9 +2458,8 @@ ar_reconcile() {
   # `{result:{...}}` envelope the existing jq already expects and cache the tab /
   # agent slices for ar_reconcile_tabs / ar_renumber_agents. Any failure (older
   # herdr with no `api snapshot`, a socket hiccup) falls back to the separate list
-  # calls, so this never raises the plugin's min herdr version. Per-tab foreground
-  # detection (`pane process-info`) is unaffected -- the snapshot carries panes but
-  # not each pane's foreground process, so naming still samples per named tab.
+  # calls, so this never raises the plugin's min herdr version. Combined labels
+  # still sample foreground processes where needed; directory-only labels do not.
   AR_HAVE_SNAPSHOT=0
   AR_SNAP_TABS_JSON=""
   AR_SNAP_AGENTS_JSON=""
@@ -2468,7 +2473,7 @@ ar_reconcile() {
     # Each tab carries the pane its NAME comes from as _name_pane: per-tab data,
     # joined here so the tab loop never asks for it again (see ar_resolve_pane).
     #
-    # Which pane that is, in order:
+    # Directory-only labels use the tab's focused pane. Combined labels choose:
     #   1. the tab's own focused pane, when an agent is running in it;
     #   2. any pane of the tab holding an agent that is working or blocked;
     #   3. the tab's own focused pane.
@@ -2482,7 +2487,8 @@ ar_reconcile() {
     # inference in ar_resolve_pane. Deliberate -- the rule needs no layout, and a
     # split with an agent working in it is the case the rule exists for.
     AR_SNAP_TABS_JSON=$(printf '%s' "$snap" | jq -c \
-      --arg brands "${AR_TITLE_BRANDS:-}" "$AR_JQ_CLEAN$AR_JQ_TASK"'
+      --arg brands "${AR_TITLE_BRANDS:-}" \
+      --arg dironly "${TAB_NAME_DIRECTORY_ONLY:-1}" "$AR_JQ_CLEAN$AR_JQ_TASK"'
       ($brands | brandmap) as $brand
        | (.result.snapshot // .snapshot) as $s
        | ($s.layouts // []) as $lay
@@ -2490,13 +2496,14 @@ ar_reconcile() {
        | {result:{tabs:[ $s.tabs[]? | .tab_id as $t
            | (($lay | map(select(.tab_id == $t)) | .[0].focused_pane_id) // "") as $lp
            | ($pan | map(select(.tab_id == $t and (.agent // "") != ""))) as $ag
-           | ( ($ag | map(select(.pane_id == $lp)) | .[0].pane_id)
+           | ( if $dironly == "1" then $lp else
+             ($ag | map(select(.pane_id == $lp)) | .[0].pane_id)
              # At work means not resting, so a status herdr adds later counts as
              # interesting instead of dropping out of the rule silently.
              // ($ag | map(select((.agent_status // "unknown") as $st
                                   | $st != "idle" and $st != "done" and $st != "unknown"))
                      | .[0].pane_id)
-             // $lp ) as $pick
+             // $lp end ) as $pick
            | ($pan | map(select(.pane_id == $pick)) | .[0]) as $p
            | ($p.terminal_title_stripped // $p.terminal_title
               | taskof($brand; $p.agent)) as $ti
@@ -2593,7 +2600,7 @@ ar_fast_tab() {
   [ -n "$tab" ] || { ar_trace "fast tab: no HERDR_TAB_ID"; return 0; }
   local prog="" cmd="" info name label raw prefix slabel enabled auto want ws
   local tag hosttag core
-  if [ "$MODE" = "preexec" ]; then
+  if [ "${TAB_NAME_DIRECTORY_ONLY:-1}" != "1" ] && [ "$MODE" = "preexec" ]; then
     if [ "${AR_FAST_SAMPLE:-}" = "1" ]; then
       info=$(ar_pane_program "${HERDR_PANE_ID:-}") || { ar_trace "$tab sampling failed, nothing renamed"; return 0; }
       ar_split_program "$info"
@@ -2638,23 +2645,23 @@ ar_fast_tab() {
   if ar_index_on tabs; then prefix=$(ar_index_prefix "$core"); else prefix=""; fi
   slabel=$(ar_tab_strip_prefix "$core" "$(ar_tag_strip_ok "$tab")")
   ar_name_eligible "$tab" "$slabel" || return 0   # it says why
-  # The context is this shell's own $PWD -- the hook backgrounds the engine from
-  # the pane, so the directory arrives for free and a cd shows up at the next
-  # prompt. The workspace base used for branch suppression comes from the last
-  # reconcile record, without a herdr round-trip on every command.
-  # The branch comes from this shell's own directory, so a checkout switched at
-  # the prompt shows up at the next one -- herdr has no event to tell us.
-  # AR_FAST_WS is what the workspace half just settled this workspace on, where
-  # it ran. The record on the tab is what the last reconcile saw, which a cd has
-  # by then moved out from under.
+  # The hook inherits this pane's $PWD, so a cd changes the name at the next
+  # prompt. Combined labels also read the branch here and use the workspace base
+  # from the current workspace pass or the last tab record for suppression.
   ws=${AR_FAST_WS:-${AR_STATE_WS:-}}
-  ar_branch_of "$PWD" >/dev/null
   ar_context_path "$PWD"
-  name=$(ar_label "$AR_CONTEXT_PATH" "$ws" "$AR_BRANCH" "$prog" "$cmd")
+  if [ "${TAB_NAME_DIRECTORY_ONLY:-1}" = "1" ]; then
+    ar_directory_name "$AR_CONTEXT_PATH" >/dev/null
+    name=$AR_DIRECTORY_NAME
+  else
+    ar_branch_of "$PWD" >/dev/null
+    name=$(ar_label "$AR_CONTEXT_PATH" "$ws" "$AR_BRANCH" "$prog" "$cmd")
+  fi
   # Empty is a real answer under HIDE_SHELL (name the tab nothing, keeping the
   # number alone when there is one); anywhere else it means we have no name.
   if [ -z "$name" ]; then
-    [ "${HIDE_SHELL:-0}" = "1" ] || { ar_trace "$tab no name computed for [$prog]"; return 0; }
+    { [ "${TAB_NAME_DIRECTORY_ONLY:-1}" != "1" ] && [ "${HIDE_SHELL:-0}" = "1" ]; } \
+      || { ar_trace "$tab no directory name computed"; return 0; }
     prefix="${prefix% }"                        # "[3] " -> "[3]", "" stays ""
   fi
   want="${hosttag}${prefix}${name}"
@@ -2877,7 +2884,7 @@ ar_main() {
       # process. Give the construct a moment to finish or spawn its real
       # program, then name by what actually holds the pane (see ar_fast_once).
       # The settle sleep runs BEFORE ar_run so the lock is never held asleep.
-      if [ "${3:-}" = "shell" ]; then
+      if [ "${3:-}" = "shell" ] && [ "${TAB_NAME_DIRECTORY_ONLY:-1}" != "1" ]; then
         AR_FAST_SAMPLE=1
         sleep 0.2 2>/dev/null || true
       fi

@@ -23,6 +23,7 @@ chmod +x "$MOCK" 2>/dev/null || true
 # reads from the environment (HERDR_TAB_ID / HERDR_PANE_ID) and a seeded state
 # file that marks tab t1 as owned with base "zsh" (so it is rename-eligible).
 setup() {
+  export TAB_NAME_DIRECTORY_ONLY=0
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-fast.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"

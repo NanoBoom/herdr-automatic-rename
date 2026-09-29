@@ -85,6 +85,11 @@ unset _ar_icons_dir
 
 # ---- the context half of a label (TAB_CONTEXT) ----
 
+# 1 = name a tab only after its project directory, or its current directory
+# outside a project. Program, branch, agent title, and context separators do not
+# contribute. 0 keeps the older combined label rules below.
+: "${TAB_NAME_DIRECTORY_ONLY:=1}"
+
 # 1 = put the context in front of the program: the directory the pane sits in,
 # the branch it has checked out, the machine it reached over ssh. A tab says WHAT
 # is running; without this half, five agent tabs across three checkouts read alike
@@ -534,6 +539,29 @@ ar_context_dir() {
   [ -n "$base" ] || return 0
   AR_CONTEXT=$(ar_shorten "$base" "${MAX_CONTEXT_LEN:-12}")
   printf '%s' "$AR_CONTEXT"
+}
+
+# ar_directory_name <resolved context directory> -> the complete final path
+# component for directory-only tab naming. Unlike the older context half, this
+# does not shorten a folder name or depend on TAB_CONTEXT.
+ar_directory_name() {
+  local dir=$1 base
+  AR_DIRECTORY_NAME=""
+  case $dir in /*) ;; *) return 0 ;; esac
+  dir=${dir%/}
+  if [ -z "$dir" ]; then
+    AR_DIRECTORY_NAME=/
+    printf '/'
+    return 0
+  fi
+  base=${dir##*/}
+  [ -n "$base" ] || return 0
+  case $base in
+  *[[:cntrl:]]* | *"  "*) base=$(printf '%s' "$base" | tr -s '[:cntrl:] ' ' ')
+                          base=${base# }; base=${base% } ;;
+  esac
+  AR_DIRECTORY_NAME=$base
+  printf '%s' "$AR_DIRECTORY_NAME"
 }
 
 # The characters branch names are built out of. Cutting a long one at any of

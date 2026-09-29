@@ -12,15 +12,11 @@ By default, herdr names new tabs with plain numbers. It's difficult to know what
 
 ### After
 
-This plugin supercharges your tabs, automatically naming them either after their foreground process, inspired by [tmux](https://github.com/tmux/tmux)'s `automatic-rename`:
+This plugin names a tab after its project directory. Moving into a subdirectory keeps that name. Outside a project, the tab follows the current folder:
 
-`  [1] zsh  `‎‎‎ ‎ ‎ `  [2] nvim  ` ‎ ‎ ‎‎‎`  [3] ssh  `‎‎‎ ‎ ‎ +
+`  [1] api  `‎‎‎ ‎ ‎ `  [2] website  ` ‎ ‎ ‎‎‎`  [3] works  `‎‎‎ ‎ ‎ +
 
-Or after the agent session context:
-
-`  [1] Debug transient issue  `‎ ‎ ‎ ‎‎`  [2] Improve test suite  `‎‎‎ ‎ ‎ +
-
-The naming mechanism is highly configurable. See the Configuration section below for more info.
+The label uses only the final folder name, plus the existing jump-key number when tab numbering is enabled. Set `TAB_NAME_DIRECTORY_ONLY=0` to restore the older program, branch, and agent-title labels. See the Configuration section below for more options.
 
 ## Quick start
 
@@ -93,9 +89,9 @@ prompt_new_tab_name = false
 
 When you create a new tab, herdr prompts you to give it a name. Custom tab names are respected by this plugin. For the best UX, disable this feature to let the plugin do the naming for you by default.
 
-**2. Install herdr integrations for your coding agents.**
+**2. For combined labels, install herdr integrations for your coding agents.**
 
-See [herdr's integrations docs](https://herdr.dev/docs/integrations/) for installation details. This lets herdr detect an agent natively instead of by reading the screen, which makes for agent tab naming more effective.
+See [herdr's integrations docs](https://herdr.dev/docs/integrations/) for installation details. These help agent-title naming when `TAB_NAME_DIRECTORY_ONLY=0`.
 
 ## Configuration (optional)
 
@@ -126,8 +122,8 @@ description = "hand this tab's name back to automatic naming"
 ## Caveats
 
 - Prefix numbering stops at 9 since herdr only allows keybindings up until that number.
-- An untitled Claude Code tab gets its name from the session transcript on disk. Set `AGENT_TRANSCRIPT=0` in `config.sh` to stop that.
-- Some Linux containers and sandboxes hide the foreground process from herdr, so naming stops (numbering still works). On herdr `>= 0.8.0`, set `HERDR_PROCESS_DETECTION=child-groups` in herdr's environment.
+- In combined-label mode, an untitled Claude Code tab can get its name from the session transcript on disk. Set `AGENT_TRANSCRIPT=0` in `config.sh` to stop that.
+- Combined-label mode needs herdr's foreground process detection. Some Linux containers and sandboxes hide it; on herdr `>= 0.8.0`, set `HERDR_PROCESS_DETECTION=child-groups` in herdr's environment.
 - Below herdr `0.7.4`, a new name only shows at the next redraw, such as a focus change.
 
 ## Uninstall

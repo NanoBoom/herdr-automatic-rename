@@ -4,6 +4,10 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
 ## [Unreleased]
 
+### Changed
+
+- Tab auto-naming now shows only the project directory or current folder name, with the existing optional jump-key number. Git and language project markers keep the name stable in deeper directories. `TAB_NAME_DIRECTORY_ONLY=0` restores combined program, branch, and agent-title labels.
+
 ## [0.12.0] - 2026-09-25
 
 ### Added

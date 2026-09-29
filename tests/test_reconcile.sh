@@ -25,6 +25,7 @@ PI_SPINNER=$(printf '\342\240\213') # U+280B, one of its ten working frames
 
 # A fresh sandbox per scenario: isolated fixtures, rename log, state, and config.
 setup() {
+  export TAB_NAME_DIRECTORY_ONLY=0
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-test.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"; rm -f "$HERDR_MOCK_LOG.tabget"

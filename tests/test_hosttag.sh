@@ -70,6 +70,7 @@ MOCK="$here/mocks/herdr"
 chmod +x "$MOCK" 2>/dev/null || true
 
 setup() {
+  export TAB_NAME_DIRECTORY_ONLY=0
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-tag.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"; rm -f "$HERDR_MOCK_LOG.tabget"

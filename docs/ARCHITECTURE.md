@@ -4,13 +4,13 @@ For usage, see the [README](../README.md).
 
 ## One reconcile, one entry point
 
-`automatic-rename.sh` runs for every herdr event, both plugin actions, and the shell hooks' fast path. It routes through `ar_run` and dispatches on `argv[1]`. A full reconcile pulls workspaces, tabs, panes, and agents from one `herdr api snapshot` (a single socket call, herdr >= 0.7.2), computes the label every item should have, and issues one rename per item whose label is wrong. Older herdr with no `api snapshot` falls back to `workspace list`, `pane list`, and `agent list` once each plus `tab list` per workspace. Either way, foreground detection stays one `pane process-info` per named tab, since the snapshot carries panes but not each pane's foreground process.
+`automatic-rename.sh` runs for every herdr event, both plugin actions, and the shell hooks' fast path. It routes through `ar_run` and dispatches on `argv[1]`. A full reconcile pulls workspaces, tabs, panes, and agents from one `herdr api snapshot` (a single socket call, herdr >= 0.7.2), computes the label every item should have, and issues one rename per item whose label is wrong. Older herdr with no `api snapshot` falls back to `workspace list`, `pane list`, and `agent list` once each plus `tab list` per workspace. Directory-only labels use pane paths and need no foreground process lookup. Combined labels may use `pane process-info` because the snapshot does not carry each pane's foreground process.
 
-Computing a tab's name and its `[N]` prefix in the same pass is what settles a brand-new tab at `[3] zsh` in a single rename. Every rename is skip-if-correct, so re-firing the pass (herdr's own rename re-emits `tab.renamed`) changes nothing and cannot loop.
+Computing a tab's name and its `[N]` prefix in the same pass is what settles a brand-new tab at `[3] project` in a single rename. Every rename is skip-if-correct, so re-firing the pass (herdr's own rename re-emits `tab.renamed`) changes nothing and cannot loop.
 
 ## Naming lives in a pure module
 
-`naming.sh` turns `(program, cmdline, title)` into a display name and touches neither herdr nor the filesystem, which keeps the rules (shells, name-only programs, ignored programs, aliases, substitutions, agent titles, truncation, icons) unit testable. The icon knobs, glyph map, and lookup live in `icons.sh` (sourced by `naming.sh`) so the 100+ arm case statement stays out of the naming logic. The engine calls `ar_label` across that seam, which is the module's one entry point for "what should this tab be called": it turns the pane's directory into a context, the program into an activity, and joins them. Every function in these files uses the `ar_` prefix.
+`naming.sh` supplies the default `ar_directory_name` rule, which takes the complete final component of the resolved project or folder path. For combined labels, it turns `(program, cmdline, title)` into a display name without touching herdr or the filesystem; `ar_label` joins the pane's directory context and its activity. This keeps the combined rules (shells, name-only programs, ignored programs, aliases, substitutions, agent titles, truncation, icons) unit testable. The icon knobs, glyph map, and lookup live in `icons.sh` (sourced by `naming.sh`) so the 100+ arm case statement stays out of the naming logic. Every function in these files uses the `ar_` prefix.
 
 ## Rows carry values, not escapes
 
@@ -64,9 +64,9 @@ A reset's force is spent by the pass that consumes it. The holder can loop its r
 
 herdr installs a github plugin to a content-hashed directory, so the hooks cannot hard-code the engine path. Each hook resolves `automatic-rename.sh` relative to its own sourced-file location: zsh via `${(%):-%N}`, bash via `BASH_SOURCE[0]`, fish via `status current-filename` captured into a global. The bash hook never overwrites a `DEBUG` trap another tool already set, and cooperates with `bash-preexec` / `ble.sh` / `atuin` when present.
 
-## Shell constructs are sampled, not trusted
+## Combined labels sample shell constructs
 
-The preexec fast path names the tab by the first word of the command line, which is only honest when that word resolves to an external program. zsh expands aliases in preexec's `$2` but never functions, and bash and fish hand over the raw line, so a function `l`, a builtin, a reserved word, or a typo arrives verbatim. No program list can match those words (`IGNORED_PROGRAMS` holds `eza`, not the function `l` that calls it), so trusting them renamed the tab and let precmd snap it back: a flicker on every instant construct.
+With `TAB_NAME_DIRECTORY_ONLY=0`, the preexec fast path names the tab by the first word of the command line, which is only honest when that word resolves to an external program. zsh expands aliases in preexec's `$2` but never functions, and bash and fish hand over the raw line, so a function `l`, a builtin, a reserved word, or a typo arrives verbatim. No program list can match those words (`IGNORED_PROGRAMS` holds `eza`, not the function `l` that calls it), so trusting them renamed the tab and let precmd snap it back: a flicker on every instant construct.
 
 Each hook classifies the command word (`whence -w` in zsh, `type -t` in bash, `type --type` in fish). External commands keep the instant rename. Everything else gets a `shell` marker, and the engine sleeps 0.2 s (before taking the lock), then names the tab by the pane's actual foreground process via `pane process-info`. An instant construct has exited by then, so the leader is the shell again and nothing is renamed. A construct that wraps a long-running program gets that program's real name, which the typed word never was. When sampling fails the engine renames nothing rather than guess.
 
@@ -147,6 +147,10 @@ An agent that brands its own titles puts something in front of that glyph, and t
 
 ## The context half of a label
 
+With the default `TAB_NAME_DIRECTORY_ONLY=1`, `ar_tab_name` resolves the tab's focused pane directory and returns its full final path component. The shell hook does the same for `$PWD`, without process sampling. A project root is selected through `ar_context_path`: `.git` takes priority over language manifests inside it, and without Git the outermost manifest directory stays stable across deeper folders. The tab label contains no program, branch, agent title, or `CONTEXT_SEP`; `AUTO_INDEX_TABS` still controls its `[N]` prefix. At the filesystem root, `/` is the directory name. Manual tab renames continue to opt out through the same ownership state.
+
+The combined label rules below apply when `TAB_NAME_DIRECTORY_ONLY=0`.
+
 A tab used to say only what was running in it. `nvim` in three checkouts gave three tabs reading `nvim`, and an agent tab reading `claude` said no more. The context is the other half: the directory the pane sits in, in front of the program, joined by `CONTEXT_SEP` (`ar_compose`). It is `TAB_CONTEXT`, default on.
 
 `ar_context_path` walks upward from the pane directory. A `.git` directory or file takes priority over language project files beneath it; without Git, the outermost directory with a common language project file is the project root. This keeps the tab context stable when deeper subdirectories contain their own manifests. Outside a project, the current directory is the context. `ar_context_dir` takes only the final path component, including for the home directory. A relative path or filesystem root has no usable component.
@@ -195,9 +199,9 @@ Two costs are worth stating plainly. It reads what the user said to their agent,
 
 ## Which pane names a tab
 
-A tab's name comes from one of its panes, so the pass has to pick that pane. The snapshot's `layouts` array makes the choice possible: one entry per tab, each carrying the `focused_pane_id` of that tab's own focus. It holds for tabs nobody is looking at, which the pane list cannot report (no pane of a background tab carries `.focused`), and it is per-tab, so it never picks up the globally focused pane, which belongs to whichever client moved focus last and may sit in another tab entirely (herdr supports several clients and remote attach).
+A tab's name comes from one of its panes, so the pass has to pick that pane. The snapshot's `layouts` array makes the choice possible: one entry per tab, each carrying the `focused_pane_id` of that tab's own focus. It holds for tabs nobody is looking at, which the pane list cannot report (no pane of a background tab carries `.focused`), and it is per-tab, so it never picks up the globally focused pane, which belongs to whichever client moved focus last and may sit in another tab entirely (herdr supports several clients and remote attach). Directory-only naming uses this focused pane.
 
-Focus alone is not the whole answer for a tab with several panes. A split with an agent in one pane and a shell in the other is about the agent, and while the agent works focus sits in the shell, so naming by focus alone advertised the shell. The reshape picks, in order:
+In combined mode, focus alone is not the whole answer for a tab with several panes. A split with an agent in one pane and a shell in the other is about the agent, and while the agent works focus sits in the shell, so naming by focus alone advertised the shell. The reshape picks, in order:
 
 1. the tab's own focused pane, when herdr reports an agent running in it;
 2. any pane of the tab holding an agent whose status is `working` or `blocked`;
@@ -209,17 +213,17 @@ That is per-tab data, so it travels with the tab: the reshape that slices the sn
 
 Those lifted facts describe **the pane the reshape picked** and nothing else, so naming uses them only when the pane it resolved is that pane. Where the column came back empty the pane came from the pane list instead, and its facts have still to be read: taking the row's empty fields for that pane cost such a tab both its title and the runtime unwrap, so a `node`-fronted agent read `node` again.
 
-Older herdr, and the per-list fallback path, ship no layouts. Rules 1 and 3 both ask for the tab's own focused pane, so neither can be answered there. Rule 2 asks only for an agent at work among the tab's panes, so it still can, and it still does: a no-layout snapshot names such a tab after that agent. That is deliberate, since a split with an agent working in it is the case the rule exists for, and the rule never needed a layout to see it. Everything else falls to the inference in `ar_resolve_pane`: the sole pane of a single-pane tab, else the tab's own focused pane, else nothing. So a background multi-pane tab keeps whatever name it has unless an agent is working in it.
+Older herdr, and the per-list fallback path, ship no layouts. In combined mode, rules 1 and 3 both ask for the tab's own focused pane, so neither can be answered there. Rule 2 asks only for an agent at work among the tab's panes, so it still can, and it still does: a no-layout snapshot names such a tab after that agent. That is deliberate, since a split with an agent working in it is the case the rule exists for, and the rule never needed a layout to see it. Everything else falls to the inference in `ar_resolve_pane`: the sole pane of a single-pane tab, else the tab's own focused pane, else nothing. So a background multi-pane tab keeps whatever name it has unless an agent is working in it.
 
 The per-list path is narrower. With no snapshot there is no reshape at all, so rule 2 never runs either and that inference is the whole of it.
 
 ## The placeholder rule
 
-herdr labels a fresh tab with a small integer. When naming is on but the tab's foreground program cannot be read yet (no pane resolves, or `process-info` answers nothing), the pass counts the tab's position but defers its rename, so no throwaway `[3] 3` flashes before the real name arrives. When naming is off, the integer is numbered as-is, since nothing else will ever name it.
+herdr labels a fresh tab with a small integer. When naming is on but the tab name cannot be computed yet (no pane resolves, or in combined mode `process-info` answers nothing), the pass counts the tab's position but defers its rename, so no throwaway `[3] 3` flashes before the real name arrives. When naming is off, the integer is numbered as-is, since nothing else will ever name it.
 
 ## An empty name is a name (HIDE_SHELL)
 
-`HIDE_SHELL=1` labels a shell tab with the empty string, the only way to get herdr's own tab number back on screen: herdr renders the number whenever a tab has no label, and there is no API to ask for it directly.
+In combined mode, `HIDE_SHELL=1` labels a shell tab with the empty string, the only way to get herdr's own tab number back on screen: herdr renders the number whenever a tab has no label, and there is no API to ask for it directly. Directory-only names are never hidden by this setting.
 
 The empty string is now a name the engine has to carry around, so the invariant is: **a name is returned on stdout, and "cannot compute one" is reported only through exit status, never as empty output.** Every site that could confuse the two follows from it:
 
@@ -228,7 +232,7 @@ The empty string is now a name the engine has to carry around, so the invariant 
 - `ar_desired` numbers an empty base as `[3]` rather than `[3] `, since herdr drops the trailing space anyway and the bare form round-trips back through `ar_strip_prefix`.
 - The opt-out state machine keeps a tab whose recorded name is empty even when the label reads as herdr's integer again, which is what a restored session and herdr's own relabeling look like from here.
 - `ar_reconcile_tabs` writes an empty base when the emptiness is deliberate, and skips the tab only when herdr has not labeled it at all.
-- The fast path is the one exception: it calls `ar_label` directly rather than through `ar_tab_name`, so it has no status to read and tests `HIDE_SHELL` itself to decide whether an empty label is an answer.
+- The fast path is the one exception: in combined mode it calls `ar_label` directly rather than through `ar_tab_name`, so it has no status to read and tests `HIDE_SHELL` itself to decide whether an empty label is an answer.
 
 The placeholder rule above is unaffected: it defers a tab whose name is not computable *yet*, while an empty name is computed and final.
 

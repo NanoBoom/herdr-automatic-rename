@@ -17,6 +17,7 @@ chmod +x "$MOCK" 2>/dev/null || true
 SEP=$(printf ' \342\200\272 ')   # the CONTEXT_SEP default, U+203A
 
 setup() {
+  export TAB_NAME_DIRECTORY_ONLY=0
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-ctx.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"

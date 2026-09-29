@@ -30,7 +30,7 @@
 ar_context_path() {
   local dir=$1 marker manifest=""
   AR_CONTEXT_PATH=$dir
-  [ "${TAB_CONTEXT:-1}" = 1 ] || return 0
+  [ "${TAB_NAME_DIRECTORY_ONLY:-1}" = 1 ] || [ "${TAB_CONTEXT:-1}" = 1 ] || return 0
   case $dir in /*) ;; *) return 0 ;; esac
   dir=${dir%/}
   while [ -n "$dir" ] && [ "$dir" != / ]; do

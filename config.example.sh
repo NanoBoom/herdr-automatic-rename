@@ -9,8 +9,7 @@
 
 # ---- features ----
 
-# Name each tab after its foreground program (the shell name at a prompt). 0
-# leaves tab names alone.
+# Name each tab after its project or current folder. 0 leaves tab names alone.
 # NAME_TABS=1
 
 # Prefix workspaces and tabs with their 1-9 jump-key number, e.g. "[2] api". 0
@@ -32,7 +31,7 @@
 # naming rewrites them.
 
 # 1 puts this machine's hostname in front of the first tab of each workspace:
-# "HPmini: [1] api › nvim". The hostname is `uname -n` without the DNS domain,
+# "HPmini: [1] api". The hostname is `uname -n` without the DNS domain,
 # then trimmed by HOST_PREFIX_STRIP. The plugin only ever removes a tag it added
 # itself, so turning this off cleans up at the next event and a hand-typed name
 # is never touched.
@@ -64,6 +63,14 @@
 # the `clear` action instead.
 
 # ---- naming (only used when NAME_TABS=1) ----
+
+# Default: use only the project directory name, or the current folder name
+# outside a project. The full folder name is kept, without a branch, program,
+# agent title, or CONTEXT_SEP. The tab's [N] jump-key number is still controlled
+# by AUTO_INDEX_TABS. Set 0 to restore the older combined-label rules below.
+# TAB_NAME_DIRECTORY_ONLY=1
+
+# The following naming settings apply when TAB_NAME_DIRECTORY_ONLY=0.
 
 # 1 puts the context in front of the program: the project directory (or current
 # directory outside a project), its Git branch, or the ssh host, joined by
