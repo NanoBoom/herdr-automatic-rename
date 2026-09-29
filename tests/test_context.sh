@@ -40,11 +40,11 @@ log() { cat "$HERDR_MOCK_LOG"; }
 teardown() { rm -rf "$SB" 2>/dev/null || true; }
 
 # ======================================================================
-# Scenario 1: the directory names the tab, and the workspace name does not
-#   repeat itself.
+# Scenario 1: the directory names the tab, including when the workspace has
+#   the same name.
 #   t1 sits in a directory of its own      -> "web › nvim"
-#   t2 sits in the workspace's directory   -> "nvim" alone
-#   t3 sits at $HOME                       -> "zsh" alone (home says nothing)
+#   t2 sits in the workspace's directory   -> "api › nvim"
+#   t3 sits at $HOME                       -> "u › zsh"
 # ======================================================================
 setup
 fixture snapshot.json <<'JSON'
@@ -82,8 +82,75 @@ JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
 check_contains "the pane's directory leads the label" "$out" "tab rename w1:t1 web${SEP}nvim"
-check_contains "the workspace's own directory is not repeated" "$out" "tab rename w1:t2 nvim"
-check_contains "the home directory says nothing" "$out" "tab rename w1:t3 zsh"
+check_contains "the workspace's own directory names the tab" "$out" "tab rename w1:t2 api${SEP}nvim"
+check_contains "the home directory uses its basename" "$out" "tab rename w1:t3 u${SEP}zsh"
+teardown
+
+# A tab keeps its directory context while moving inside a Git checkout or a
+# manifest-only project. Outside projects, each current directory names it.
+setup
+mkdir -p "$SB/dev/checkout/.git" "$SB/dev/checkout/src/deep" \
+  "$SB/dev/marker/lib/deep" "$SB/plain/first" "$SB/plain/second"
+: >"$SB/dev/checkout/src/package.json"
+: >"$SB/dev/marker/package.json"
+: >"$SB/dev/marker/lib/pyproject.toml"
+context_snapshot() {
+  cat >"$HERDR_MOCK_DIR/snapshot.json" <<JSON
+{"result":{"snapshot":{
+  "workspaces":[{"workspace_id":"w1","label":"other"}],
+  "tabs":[{"tab_id":"w1:t1","label":"$2","pane_count":1,"focused":true,"workspace_id":"w1"}],
+  "panes":[{"pane_id":"p1","tab_id":"w1:t1","focused":true,"cwd":"$1"}],
+  "layouts":[{"tab_id":"w1:t1","focused_pane_id":"p1"}]
+}}}
+JSON
+}
+fixture procinfo_p1.json <<'JSON'
+{"result":{"process_info":{"foreground_process_group_id":100,
+  "foreground_processes":[{"pid":100,"argv0":"nvim","cmdline":"nvim"}]}}}
+JSON
+context_snapshot "$SB/dev/checkout" 1
+run_event tab.focused
+check_contains "Git root names the tab" "$(log)" "tab rename w1:t1 checkout${SEP}nvim"
+: >"$HERDR_MOCK_LOG"
+context_snapshot "$SB/dev/checkout/src/deep" "checkout${SEP}nvim"
+run_event pane.focused
+check "deeper Git directory keeps the tab name" "" "$(log)"
+context_snapshot "$SB/dev/marker/lib/deep" "checkout${SEP}nvim"
+run_event pane.focused
+check_contains "manifest-only project names the tab" "$(log)" "tab rename w1:t1 marker${SEP}nvim"
+: >"$HERDR_MOCK_LOG"
+context_snapshot "$SB/dev/marker/lib" "marker${SEP}nvim"
+run_event pane.focused
+check "deeper manifest project directory keeps the tab name" "" "$(log)"
+context_snapshot "$SB/plain/first" "marker${SEP}nvim"
+run_event pane.focused
+check_contains "plain directory uses its own basename" "$(log)" "tab rename w1:t1 first${SEP}nvim"
+: >"$HERDR_MOCK_LOG"
+context_snapshot "$SB/plain/second" "first${SEP}nvim"
+run_event pane.focused
+check_contains "another plain directory changes the tab name" "$(log)" "tab rename w1:t1 second${SEP}nvim"
+teardown
+
+# The shell hook uses the same project root when a prompt is drawn after cd.
+setup
+export HERDR_TAB_ID=t1 HERDR_PANE_ID=p1
+mkdir -p "$SB/dev/checkout/.git" "$SB/dev/checkout/src/deep" \
+  "$SB/dev/marker/src/deep" "$XDG_STATE_HOME/herdr-automatic-rename"
+: >"$SB/dev/marker/go.mod"
+printf '{"t1":{"auto":"checkout › zsh","enabled":true,"ws":"other"}}\n' \
+  >"$XDG_STATE_HOME/herdr-automatic-rename/state.json"
+fixture tab_t1.json <<'JSON'
+{"result":{"tab":{"tab_id":"t1","label":"checkout › zsh"}}}
+JSON
+( cd "$SB/dev/checkout/src/deep" && /usr/bin/env bash "$ENGINE" precmd zsh )
+check "the hook keeps the Git project name in a deep directory" "" "$(log)"
+printf '{"t1":{"auto":"marker › zsh","enabled":true,"ws":"other"}}\n' \
+  >"$XDG_STATE_HOME/herdr-automatic-rename/state.json"
+fixture tab_t1.json <<'JSON'
+{"result":{"tab":{"tab_id":"t1","label":"marker › zsh"}}}
+JSON
+( cd "$SB/dev/marker/src/deep" && /usr/bin/env bash "$ENGINE" precmd zsh )
+check "the hook keeps the manifest project name in a deep directory" "" "$(log)"
 teardown
 
 # ======================================================================
@@ -141,8 +208,7 @@ teardown
 #   exists to avoid.
 #
 #   Its directory is the shell's own $PWD (the hook backgrounds the engine from
-#   the pane), and the workspace name it dedupes against is the one the last
-#   reconcile recorded on the tab.
+#   the pane). The last reconcile recorded the workspace base for branch checks.
 # ======================================================================
 setup
 export HERDR_TAB_ID=t1 HERDR_PANE_ID=p1
@@ -156,14 +222,17 @@ JSON
 out=$(log)
 check_contains "the hook names the context from \$PWD" "$out" "tab rename t1 web${SEP}zsh"
 : >"$HERDR_MOCK_LOG"
+cat >"$HERDR_MOCK_DIR/tab_t1.json" <<JSON
+{"result":{"tab":{"tab_id":"t1","label":"web${SEP}zsh"}}}
+JSON
 ( cd "$SB/dev/api" && /usr/bin/env bash "$ENGINE" precmd zsh )
 out=$(log)
-check_absent "the hook dedupes the workspace it was told" "$out" "api${SEP}"
+check_contains "the hook uses the current directory even when it matches the workspace" "$out" "tab rename t1 api${SEP}zsh"
 teardown
 
 # ======================================================================
-# Scenario 5: the workspace a tab dedupes against is recorded on the tab, so the
-#   hook can read it back without a herdr call of its own.
+# Scenario 5: the workspace base is recorded on the tab for branch suppression,
+#   so the hook can read it back without a herdr call of its own.
 # ======================================================================
 setup
 fixture snapshot.json <<'JSON'
@@ -180,18 +249,15 @@ fixture procinfo_p1.json <<'JSON'
 JSON
 HOME=/home/u run_event tab.focused
 got=$(jq -r '."w1:t1".ws' "$XDG_STATE_HOME/herdr-automatic-rename/state.json" 2>/dev/null)
-# Recorded WITHOUT the numbering prefix: it is compared against a directory name,
-# and "[1] api" is not one.
+# Recorded WITHOUT the numbering prefix so branch comparison sees the base name.
 check "the workspace base is recorded on the tab" "api" "$got"
 teardown
 
 # ======================================================================
 # Scenario 6: a workspace renamed EARLIER IN THE SAME PASS. The workspace pass
 #   runs first and re-labels w1 from its directory ("api" -> "web"); the tab pass
-#   reads the workspace list fetched before that rename, so the label in hand is
-#   already one pass out of date. Deduping against it would name a tab in the web
-#   workspace "web > nvim" -- the exact repetition the dedupe exists to remove --
-#   until some later event refreshed the list.
+#   reads the workspace list fetched before that rename. The tab still uses its
+#   own directory, and the updated workspace base is available to branch checks.
 #
 #   Two events, because a workspace only follows its directory once the plugin
 #   owns its label: the first adopts it where label and directory agree, the
@@ -230,14 +296,13 @@ JSON
 HOME=/home/u run_event pane.focused
 out=$(log)
 check_contains "the workspace follows its directory" "$out" "workspace rename w1 [1] web"
-check_contains "the tab dedupes against the NEW name" "$out" "tab rename w1:t1 [1] nvim"
-check_absent   "... not against the one it was fetched with" "$out" "web${SEP}nvim"
+check_contains "the tab keeps the directory name" "$out" "tab rename w1:t1 [1] web${SEP}nvim"
 teardown
 
 # ======================================================================
 # Scenario 7: the branch qualifies the context.
 #   t1 sits in the workspace's own directory on a feature branch -> the
-#      directory drops out and the branch is what is left to say
+#      project name and branch both appear
 #   t2 sits in another checkout that is on its trunk -> the branch says nothing
 #      (every tab of that repository would carry it alike)
 # ======================================================================
@@ -274,7 +339,7 @@ fixture procinfo_p2.json <<'JSON'
 JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
-check_contains "the branch is reduced to its issue key" "$out" "tab rename w1:t1 PROJ-517${SEP}nvim"
+check_contains "the branch is reduced to its issue key" "$out" "tab rename w1:t1 api${SEP}PROJ-517${SEP}nvim"
 check_contains "the trunk contributes nothing"          "$out" "tab rename w1:t2 web${SEP}nvim"
 check_absent   "... and is not shown beside it"         "$out" "web${SEP}main"
 teardown
@@ -297,12 +362,15 @@ fixture tab_t1.json <<'JSON'
 {"result":{"tab":{"tab_id":"t1","label":"zsh"}}}
 JSON
 ( cd "$SB/dev/api" && /usr/bin/env bash "$ENGINE" precmd zsh )
-check "SHOW_BRANCH=0 leaves the hook's label bare" "" "$(log)"
+check_contains "SHOW_BRANCH=0 leaves the branch out" "$(log)" "tab rename t1 api${SEP}zsh"
 : >"$HERDR_MOCK_LOG"
+cat >"$HERDR_MOCK_DIR/tab_t1.json" <<JSON
+{"result":{"tab":{"tab_id":"t1","label":"api${SEP}zsh"}}}
+JSON
 unset SHOW_BRANCH
 ( cd "$SB/dev/api" && /usr/bin/env bash "$ENGINE" precmd zsh )
 check_contains "the hook reads the branch from its own directory" "$(log)" \
-  "tab rename t1 oauth${SEP}zsh"
+  "tab rename t1 api${SEP}oauth${SEP}zsh"
 teardown
 
 # ======================================================================
@@ -393,8 +461,8 @@ cat >"$HERDR_MOCK_DIR/snapshot.json" <<JSON
 JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
-check_contains "the session names the untitled tab" "$out" "tab rename w1:t1 code-review spec.md"
-check_contains "a titled agent is named from its title" "$out" "tab rename w1:t2 Squash merge command"
+check_contains "the session names the untitled tab" "$out" "tab rename w1:t1 api${SEP}code-review spec.md"
+check_contains "a titled agent is named from its title" "$out" "tab rename w1:t2 api${SEP}Squash merge command"
 check_absent   "and its transcript is never opened"     "$out" "Never read this"
 teardown
 
@@ -425,7 +493,7 @@ fixture procinfo_p1.json <<'JSON'
 JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
-check_contains "the program names the tab instead" "$out" "tab rename w1:t1 claude"
+check_contains "the program names the tab instead" "$out" "tab rename w1:t1 api${SEP}claude"
 check_absent   "the transcript is not read"        "$out" "Not to be read"
 teardown
 
@@ -457,17 +525,14 @@ fixture procinfo_p1.json <<'JSON'
 JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
-check_contains "the program names the tab" "$out" "tab rename w1:t1 codex"
+check_contains "the program names the tab" "$out" "tab rename w1:t1 api${SEP}codex"
 check_absent   "another agent's transcript is not read" "$out" "Belongs to claude"
 teardown
 
 # ======================================================================
-# Scenario 14: a workspace rewritten by WORKSPACE_SUBSTITUTE_SETS still swallows
-#   its own name out of its tabs. The rewrite is the sidebar's alone -- the
-#   directory is still called what it is called -- so the tabs go on deduping
-#   against the DERIVED name. Deduping against the rewrite instead would have a
-#   tab in worktree-feature/ re-inject the long spelling the sidebar was
-#   shortened to lose ("worktree-feature > nvim" under a "wt-feature" heading).
+# Scenario 14: a workspace rewritten by WORKSPACE_SUBSTITUTE_SETS keeps its
+#   derived base for branch checks. The tab directory context is independent of
+#   the sidebar rewrite.
 # ======================================================================
 setup
 printf "WORKSPACE_SUBSTITUTE_SETS=('s|^worktree-|wt-|')\n" \
@@ -503,7 +568,7 @@ JSON
 HOME=/home/u run_event tab.focused
 out=$(log)
 check_contains "the workspace wears the rewrite" "$out" "workspace rename w1 wt-feature"
-check_contains "and its tabs still drop its directory" "$out" "tab rename w1:t1 nvim"
+check_contains "and its tabs use the directory name" "$out" "tab rename w1:t1 worktree${SEP}nvim"
 check_contains "a subdirectory still says which" "$out" "tab rename w1:t2 web${SEP}nvim"
 teardown
 

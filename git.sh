@@ -4,7 +4,7 @@
 # module that reads the FILESYSTEM (naming.sh reads strings, icons.sh is a
 # table), which is why it is not in either of them.
 #
-# Everything here is read out of the files under .git and nothing runs git. A
+# Everything here reads the filesystem directly and nothing runs git. A
 # `git rev-parse` is a process; `HEAD` is one open, and this runs once per named
 # tab on every herdr event and again on every shell prompt, where a fork per tab
 # is exactly the cost that shows up as a slow prompt. Nothing is cached either:
@@ -18,6 +18,35 @@
 # Checked on its own by shellcheck, where those globals have no reader in sight:
 # the engine next door is what reads them.
 # shellcheck disable=SC2034
+
+# ar_context_path <pane directory> -> sets AR_CONTEXT_PATH to the project
+# root, or to the pane directory when no project marker is found. A Git root
+# wins over language manifests inside it, so entering a package subdirectory
+# cannot rename the tab. Without Git, the outermost manifest keeps the name
+# stable across subdirectories that also contain manifests. A .git file
+# also marks a linked worktree. Only absolute paths are searched; herdr supplies
+# those. Resolving a relative path against this plugin's cwd would name another
+# place.
+ar_context_path() {
+  local dir=$1 marker manifest=""
+  AR_CONTEXT_PATH=$dir
+  [ "${TAB_CONTEXT:-1}" = 1 ] || return 0
+  case $dir in /*) ;; *) return 0 ;; esac
+  dir=${dir%/}
+  while [ -n "$dir" ] && [ "$dir" != / ]; do
+    if [ -d "$dir/.git" ] || [ -f "$dir/.git" ]; then
+      AR_CONTEXT_PATH=$dir
+      return 0
+    fi
+    for marker in package.json pyproject.toml setup.py requirements.txt Cargo.toml \
+      go.mod pom.xml build.gradle build.gradle.kts settings.gradle settings.gradle.kts \
+      Gemfile composer.json pubspec.yaml mix.exs CMakeLists.txt; do
+      if [ -f "$dir/$marker" ]; then manifest=$dir; break; fi
+    done
+    dir=${dir%/*}
+  done
+  [ -z "$manifest" ] || AR_CONTEXT_PATH=$manifest
+}
 
 # ar_git_line <path> -> sets AR_GIT_LINE to that file's first line, trimmed;
 # rc 1 when there is nothing to read (missing file, a directory, an empty line).

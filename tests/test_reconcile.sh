@@ -1229,23 +1229,23 @@ fixture procinfo_p8.json <<'JSON'
 JSON
 run_event tab.focused
 out=$(log)
-check_contains "an agent tab is named after its task"  "$out" "tab rename w1:t1 Squash merge command"
+check_contains "an agent tab is named after its task"  "$out" "tab rename w1:t1 api › Squash merge command"
 check_absent   "the spinner never reaches the label"   "$out" "$SPINNER"
 check_absent   "and the program name is not used"      "$out" "tab rename w1:t1 claude"
-check_contains "a refused title falls back to program" "$out" "tab rename w1:t2 claude"
+check_contains "a refused title falls back to program" "$out" "tab rename w1:t2 api › claude"
 check_absent   "the refused title is never a label"    "$out" "Claude Code"
-check_contains "a title needs no process lookup"       "$out" "tab rename w1:t3 Reticulating splines"
-check_contains "a title that is just the cwd is refused" "$out" "tab rename w1:t4 claude"
-check_absent   "the directory is never the label"      "$out" "tab rename w1:t4 api"
-check_contains "the unstripped title is read too"      "$out" "tab rename w1:t5 Draft the changelog"
-check_contains "a pane with no agent is named by program" "$out" "tab rename w1:t6 nvim"
+check_contains "a title needs no process lookup"       "$out" "tab rename w1:t3 api › Reticulating splines"
+check_contains "a title that is just the cwd is refused" "$out" "tab rename w1:t4 api › claude"
+check_absent   "the directory is never the task"       "$out" "tab rename w1:t4 api › api"
+check_contains "the unstripped title is read too"      "$out" "tab rename w1:t5 api › Draft the changelog"
+check_contains "a pane with no agent is named by program" "$out" "tab rename w1:t6 api › nvim"
 check_absent   "a non-agent title never names a tab"   "$out" "Downloading the internet"
 # The branded agent (the fixture writes both glyphs as JSON escapes; jq decodes them).
-check_contains "a branded title still names its tab"   "$out" "tab rename w1:t7 Squash the fixups"
+check_contains "a branded title still names its tab"   "$out" "tab rename w1:t7 api › Squash the fixups"
 check_absent   "the brand never reaches a label"       "$out" "$PI_BRAND"
 check_absent   "nor does the working spinner"          "$out" "$PI_SPINNER"
-check_contains "a branded cwd title is refused"        "$out" "tab rename w1:t8 omp"
-check_absent   "nor the directory behind the brand"    "$out" "tab rename w1:t8 api"
+check_contains "a branded cwd title is refused"        "$out" "tab rename w1:t8 api › omp"
+check_absent   "nor the directory behind the brand"    "$out" "tab rename w1:t8 api › api"
 teardown
 
 # ======================================================================
@@ -1277,7 +1277,7 @@ fixture procinfo_p1.json <<'JSON'
 JSON
 run_event tab.focused
 out=$(log)
-check_contains "titles off -> the alias names the tab" "$out" "tab rename w1:t1 cl"
+check_contains "titles off -> the alias names the tab" "$out" "tab rename w1:t1 api › cl"
 check_absent   "and the task title is not used"        "$out" "Squash merge command"
 teardown
 
@@ -1507,18 +1507,18 @@ fixture procinfo_p6.json <<'JSON'
 JSON
 run_event tab.focused
 out=$(log)
-check_contains "the snapshot names a tab after its task"  "$out" "tab rename w1:t1 Squash merge command"
+check_contains "the snapshot names a tab after its task"  "$out" "tab rename w1:t1 api › Squash merge command"
 check_absent   "no spinner reaches a snapshot label"      "$out" "$SPINNER"
-check_contains "the PICKED pane's task names a split tab" "$out" "tab rename w1:t2 Draft the changelog"
+check_contains "the PICKED pane's task names a split tab" "$out" "tab rename w1:t2 api › Draft the changelog"
 check_absent   "the focused half's title is not lifted"   "$out" "Downloading the internet"
 check_absent   "nor is the focused half named instead"    "$out" "tab rename w1:t2 zsh"
-check_contains "a snapshot title that is just the cwd is refused" "$out" "tab rename w1:t3 claude"
+check_contains "a snapshot title that is just the cwd is refused" "$out" "tab rename w1:t3 api › claude"
 check_absent   "the directory is never the label"         "$out" "tab rename w1:t3 API"
-check_contains "the unstripped title is lifted too"       "$out" "tab rename w1:t4 Rename the tabs"
-check_contains "a branded snapshot title is refused too" "$out" "tab rename w1:t5 omp"
+check_contains "the unstripped title is lifted too"       "$out" "tab rename w1:t4 api › Rename the tabs"
+check_contains "a branded snapshot title is refused too" "$out" "tab rename w1:t5 api › omp"
 check_absent   "no brand reaches a snapshot label"       "$out" "$PI_BRAND"
 check_absent   "nor a working spinner"                   "$out" "$PI_SPINNER"
-check_absent   "nor the directory behind them"           "$out" "tab rename w1:t5 api"
+check_absent   "nor the directory behind them"           "$out" "tab rename w1:t5 api › api"
 teardown
 
 # ======================================================================
@@ -1572,9 +1572,9 @@ JSON
 run_event tab.focused
 out=$(log)
 check_contains "no layouts: the pane's own title still names the tab" "$out" \
-  "tab rename w1:t1 Squash merge command"
+  "tab rename w1:t1 api › Squash merge command"
 check_absent   "an empty row never names it by program"  "$out" "tab rename w1:t1 claude"
-check_contains "no layouts: the runtime is still unwrapped" "$out" "tab rename w1:t2 codex"
+check_contains "no layouts: the runtime is still unwrapped" "$out" "tab rename w1:t2 api › codex"
 check_absent   "the runtime never reaches the tab bar"   "$out" "node"
 teardown
 
@@ -1618,8 +1618,8 @@ fixture procinfo_p2.json <<'JSON'
 JSON
 run_event tab.focused
 out=$(log)
-check_contains "a covered tab is named from its row"      "$out" "tab rename w1:t1 Draft the changelog"
-check_contains "an uncovered tab reads its own pane"      "$out" "tab rename w1:t2 Reticulating splines"
+check_contains "a covered tab is named from its row"      "$out" "tab rename w1:t1 api › Draft the changelog"
+check_contains "an uncovered tab reads its own pane"      "$out" "tab rename w1:t2 api › Reticulating splines"
 check_absent   "and is not named by program instead"      "$out" "tab rename w1:t2 claude"
 teardown
 
@@ -1825,9 +1825,9 @@ fixture procinfo_p2.json <<'JSON'
 JSON
 run_event tab.focused
 out=$(log)
-check_contains "a product name with a trailing space is still refused" "$out" "tab rename w1:t1 claude"
-check_contains "so is herdr's own label with one"                      "$out" "tab rename w1:t2 claude"
-check_contains "and a real title arrives in the shape it will carry"   "$out" "tab rename w1:t3 Squash merge command"
+check_contains "a product name with a trailing space is still refused" "$out" "tab rename w1:t1 api › claude"
+check_contains "so is herdr's own label with one"                      "$out" "tab rename w1:t2 api › claude"
+check_contains "and a real title arrives in the shape it will carry"   "$out" "tab rename w1:t3 api › Squash merge command"
 teardown
 
 # ======================================================================
@@ -1886,7 +1886,7 @@ JSON
 run_event tab.focused
 out=$(log)
 check_contains "no layouts: an agent at work still names its tab" "$out" \
-  "tab rename w1:t1 Squash merge command"
+  "tab rename w1:t1 api › Squash merge command"
 check_absent   "and never after the shell beside it"     "$out" "tab rename w1:t1 zsh"
 check_absent   "an idle agent picks no pane without a layout" "$out" "tab rename w1:t2"
 teardown

@@ -756,14 +756,14 @@ ar_state_get() { # <tab_id> <field>
     "$STATE_FILE" 2>/dev/null
 }
 # <ws> is the base label of the workspace the tab was in when it was named. It
-# is recorded so the shell hook can dedupe the context against it (see
-# ar_context_dir) without a herdr call of its own on every prompt. Absent for
+# is recorded so the shell hook can suppress a branch repeated by the workspace
+# without a herdr call of its own on every prompt. Absent for
 # every key but a named tab's, and dropped rather than written empty.
 #
 # Last known good, not current: a workspace renamed, or a tab dragged into
-# another one, leaves it stale until the next reconcile. That pass is the one
-# that changes the label anyway -- a dedupe that flips is a different label --
-# so the staleness costs at most the label a tab already had.
+# another one, leaves it stale until the next reconcile. Directory context is
+# resolved independently from the pane path, so this affects branch suppression
+# until the next pass.
 # The whole store as one row per key, loaded once per pass. Every writer below
 # clears it, so a read after a write goes back to the file. The rows are the
 # same five fields ar_state_fields hands out, led by the key they belong to.
@@ -978,7 +978,7 @@ ar_state_claim() {
 # AR_STATE_WS / AR_STATE_TAGGED for the tab just examined, so a caller about to
 # record ownership can tell an unchanged claim (the steady state, every pass,
 # for every named tab) from one worth writing -- ar_state_set rewrites the whole
-# state file. The shell hook reads AR_STATE_WS for the dedupe as well.
+# state file. The shell hook reads AR_STATE_WS for branch suppression as well.
 ar_name_eligible() {
   local tab=$1 slabel=$2 enabled auto ws seeded tagged
   ar_state_rows
@@ -1125,7 +1125,7 @@ ar_resolve_pane() {
 # that -- a spinner glyph is still on the front of it (see ar_title_clean).
 #
 # AR_PANE_DIR is the directory the pane is in: the context half of the label is
-# named after it (ar_context_dir), and AR_PANE_DIR_LC -- its basename, folded --
+# resolved from it (ar_context_path), and AR_PANE_DIR_LC -- its basename, folded --
 # is what recognizes a title that is just that directory repeated back.
 ar_pane_facts() {
   local out
@@ -1318,7 +1318,8 @@ ar_tab_name() {
         [ -n "$condensed" ] && title=$condensed
       fi
       ar_branch_of "$AR_PANE_DIR" >/dev/null
-      ar_label "$AR_PANE_DIR" "${5:-}" "$AR_BRANCH" "$AR_PANE_AGENT" "" "$title"
+      ar_context_path "$AR_PANE_DIR"
+      ar_label "$AR_CONTEXT_PATH" "${5:-}" "$AR_BRANCH" "$AR_PANE_AGENT" "" "$title"
       return 0
     fi
   fi
@@ -1343,7 +1344,8 @@ ar_tab_name() {
   fi
   ar_trace "$1 program path used: $prog"
   ar_branch_of "$AR_PANE_DIR" >/dev/null
-  ar_label "$AR_PANE_DIR" "${5:-}" "$AR_BRANCH" "$prog" "$cmd"
+  ar_context_path "$AR_PANE_DIR"
+  ar_label "$AR_CONTEXT_PATH" "${5:-}" "$AR_BRANCH" "$prog" "$cmd"
 }
 
 # ======================================================================
@@ -1775,12 +1777,12 @@ ar_state_prune_ws() {
 # Ownership decides per workspace whether that swap applies (ar_ws_track_eligible).
 #
 # WORKSPACE_SUBSTITUTE_SETS rewrites that base on its way to the sidebar, and
-# only there: the directory, the Git worktree, and what this workspace's tabs
-# dedupe against are all still the derived name. --clear is the one pass that
+# only there: the directory, the Git worktree, and the base used to suppress a
+# repeated branch in its tabs are all still the derived name. --clear is the one pass that
 # takes the rewrite back, handing over the derived base and stripping the prefix
 # off that, which is why it now reads the derivation it used to skip.
 ar_renumber_workspaces() {
-  local json=$1 rows wid label pos base lprefix dedupe want ibase track seen=""
+  local json=$1 rows wid label pos base lprefix derived want ibase track seen=""
   AR_WS_BASES=""
   [ -n "$json" ] || return 0
   # Read with its status: a jq that fails after emitting some rows would leave
@@ -1814,17 +1816,15 @@ ar_renumber_workspaces() {
     # to leave alone. Taking the base back off the label instead is a no-op on
     # exactly the labels the strip refused.
     lprefix=${label%"$base"}
-    dedupe=$base
+    derived=$base
     track=0
     if ibase=$(ar_identity_base "$wid") \
        && ar_ws_track_eligible "$wid" "$base" "$ibase" "$(ar_panedir_base "$wid")"; then
       # The rewrite is display only, so the two part company here: the workspace
-      # is RENAMED to the rewritten spelling, and its tabs go on deduping against
-      # the directory-derived one. A tab sitting in worktree-feature/ would
-      # otherwise stop recognizing its own workspace and re-inject the long name
-      # it was rewritten to lose ("worktree-feature > nvim" under a "wt-feature"
-      # sidebar).
-      dedupe=$AR_WS_IBASE
+      # is RENAMED to the rewritten spelling, while branch suppression uses the
+      # directory-derived one. A branch that repeats the project directory then
+      # stays quiet regardless of the sidebar rewrite.
+      derived=$AR_WS_IBASE
       # --clear is on its way out and takes the rewrite with it, so it hands
       # back the derived name and strips the prefix off THAT. Leaving the
       # rewrite behind would strand it: it is documented as the last step before
@@ -1853,15 +1853,10 @@ ar_renumber_workspaces() {
     if [ "$want" != "$label" ]; then
       "$HERDR" workspace rename "$wid" "$want" >/dev/null 2>&1 || continue
     fi
-    # What this workspace is called AFTER this pass, for the tab pass to dedupe
-    # against (ar_ws_base). It reads the workspace list this pass fetched, which
-    # was fetched before the rename above, so a workspace re-labelled from its
-    # directory here would otherwise have its tabs deduped against the name it
-    # had a moment ago -- and a tab in the web workspace would read "web > nvim"
-    # until some later event refreshed the list. Recorded only past the rename,
-    # so a rename herdr rejected leaves the stale label standing, which is what
-    # the workspace still carries.
-    AR_WS_BASES="$AR_WS_BASES$wid$AR_ROW_SEP$dedupe
+    # The derived workspace base for this pass's tab branch suppression
+    # (ar_ws_base). The fetched list predates the rename above, so record the
+    # current derivation here. A rejected rename leaves the fetched base in use.
+    AR_WS_BASES="$AR_WS_BASES$wid$AR_ROW_SEP$derived
 "
     # --clear keeps its records, exactly as the tab half does: the rules are
     # still in the config, and the next event is entitled to apply them again.
@@ -1881,7 +1876,7 @@ ar_renumber_workspaces() {
 # are the only item both features touch), so per tab we compute the base ONCE
 # (naming if owned/eligible, else the stripped current base) and apply the
 # position prefix in a single rename. Arg 1 is the cached `workspace list` JSON.
-# ar_ws_base <workspace_id> <label> -> the base its tabs dedupe against: what
+# ar_ws_base <workspace_id> <label> -> the base its tabs compare branches against: what
 # the workspace pass just applied, else the label as fetched with its numbering
 # prefix off. A loop over rows rather than a jq, like ar_identity_base next door:
 # a pass sees every workspace once and the list is short.
@@ -1898,10 +1893,8 @@ ar_ws_base() {
 ar_reconcile_tabs() {
   local wsjson=$1 w wslabel wsbase tjson rows tid label pcount foc base0 base named name i want notag tag tagok
   [ -n "$wsjson" ] || return 0
-  # The workspace's own label comes down with its id: a tab in the workspace
-  # named after its own directory drops that half of its name (ar_context_dir),
-  # and the numbering prefix comes off first because what it is compared against
-  # is a directory name, which "[1] api" is not.
+  # The workspace's own label comes down with its id for branch suppression.
+  # The numbering prefix comes off because it is not part of that base.
   #
   # The rows are read with their status. A jq that fails after emitting some of
   # them would leave the tabs of the missing workspaces out of AR_SEEN_TABS with
@@ -2582,10 +2575,8 @@ ar_reconcile() {
 # flicker); a construct wrapping nvim samples as nvim. On sampling failure
 # rename nothing -- never guess.
 ar_fast_once() {
-  # The workspace goes first so the tab can dedupe against the name the
-  # workspace ends the prompt with. The other order leaves the tab repeating the
-  # workspace's own name (a tab reading "project-b > zsh" inside project-b) at
-  # every prompt until a full reconcile refreshes the base recorded on the tab.
+  # The workspace goes first so the tab gets the current base for branch
+  # suppression and records it for the next prompt.
   #
   # A cd has landed by the time the prompt is drawn, and preexec's $PWD is the
   # one the last precmd already saw, so the workspace half is precmd's alone.
@@ -2649,9 +2640,8 @@ ar_fast_tab() {
   ar_name_eligible "$tab" "$slabel" || return 0   # it says why
   # The context is this shell's own $PWD -- the hook backgrounds the engine from
   # the pane, so the directory arrives for free and a cd shows up at the next
-  # prompt. The workspace it dedupes against is whatever the last reconcile
-  # recorded on the tab: reading it back costs nothing, where asking herdr would
-  # cost a socket round-trip on every command.
+  # prompt. The workspace base used for branch suppression comes from the last
+  # reconcile record, without a herdr round-trip on every command.
   # The branch comes from this shell's own directory, so a checkout switched at
   # the prompt shows up at the next one -- herdr has no event to tell us.
   # AR_FAST_WS is what the workspace half just settled this workspace on, where
@@ -2659,7 +2649,8 @@ ar_fast_tab() {
   # by then moved out from under.
   ws=${AR_FAST_WS:-${AR_STATE_WS:-}}
   ar_branch_of "$PWD" >/dev/null
-  name=$(ar_label "$PWD" "$ws" "$AR_BRANCH" "$prog" "$cmd")
+  ar_context_path "$PWD"
+  name=$(ar_label "$AR_CONTEXT_PATH" "$ws" "$AR_BRANCH" "$prog" "$cmd")
   # Empty is a real answer under HIDE_SHELL (name the tab nothing, keeping the
   # number alone when there is one); anywhere else it means we have no name.
   if [ -z "$name" ]; then
@@ -2769,10 +2760,8 @@ ar_fast_workspace() {
     "$HERDR" workspace rename "$wid" "$want" >/dev/null 2>&1 || { ar_trace "ws:$wid rename failed: [$want]"; return 0; }
     ar_trace "ws:$wid rename issued: [$label] -> [$want]"
   fi
-  # What the workspace is called after this prompt, for the tab half to dedupe
-  # against -- the same handover ar_renumber_workspaces makes through AR_WS_BASES,
-  # and the derived name for the same reason: a rewrite is the sidebar's, and a
-  # tab still sits in a directory called what the directory is called.
+  # The derived workspace base after this prompt is passed to the tab half for
+  # branch suppression, as ar_renumber_workspaces does through AR_WS_BASES.
   AR_FAST_WS=$base
   ar_ws_claim "$wid" "$shown"
 }

@@ -65,13 +65,14 @@
 
 # ---- naming (only used when NAME_TABS=1) ----
 
-# 1 puts the context in front of the program: the pane's directory, its Git
-# branch, or the ssh host, joined by CONTEXT_SEP ("api › MC-13675 › nvim"). 0
+# 1 puts the context in front of the program: the project directory (or current
+# directory outside a project), its Git branch, or the ssh host, joined by
+# CONTEXT_SEP ("api › MC-13675 › nvim"). 0
 # names by the program alone.
 #
-# The directory is left out when it is your home directory, the filesystem root,
-# or the same as the workspace name (herdr already shows that above the tabs). A
-# worktree directory named after the workspace's branch counts as the same. A
+# A project is detected by .git or a common language project file; its name
+# stays the same in deeper subdirectories. Outside projects the current folder
+# is used, including your home directory. The filesystem root has no name. A
 # directory longer than MAX_CONTEXT_LEN is shortened the way a branch is, so
 # "bugfix-proj-482-fix-rev-discrepancy" reads as "PROJ-482".
 #

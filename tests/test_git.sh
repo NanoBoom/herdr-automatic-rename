@@ -16,6 +16,32 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-git.XXXXXX")
 
+# The tab context resolves to the nearest project root. A plain directory keeps
+# its own path, so naming.sh can take its final component in either case.
+context_path() { ar_context_path "$1"; printf '%s' "$AR_CONTEXT_PATH"; }
+mkdir -p "$SB/plain/one/two" "$SB/project/src/deep" "$SB/linked/src" \
+  "$SB/python/tests" "$SB/project/packages/nested/src" "$SB/language/nested/src"
+mkdir -p "$SB/project/.git"
+: >"$SB/linked/.git"
+: >"$SB/python/pyproject.toml"
+: >"$SB/project/packages/nested/package.json"
+: >"$SB/language/pyproject.toml"
+: >"$SB/language/nested/package.json"
+check "a .git directory marks the project root" "$SB/project" \
+  "$(context_path "$SB/project/src/deep")"
+check "the root names itself" "$SB/project" "$(context_path "$SB/project")"
+check "a .git file marks a linked worktree" "$SB/linked" \
+  "$(context_path "$SB/linked/src")"
+check "a language manifest marks a non-Git project" "$SB/python" \
+  "$(context_path "$SB/python/tests")"
+check "Git root wins over a package manifest below it" "$SB/project" \
+  "$(context_path "$SB/project/packages/nested/src")"
+check "without Git the outermost manifest keeps the name" "$SB/language" \
+  "$(context_path "$SB/language/nested/src")"
+check "plain directories keep the current path" "$SB/plain/one/two" \
+  "$(context_path "$SB/plain/one/two")"
+check "a relative path is not searched" "plain/one" "$(context_path "plain/one")"
+
 # head <dir> -> "<branch or short hash>|<default branch>", or "-" when the
 # directory is in no repository. One string so a check reads as one line.
 head_of() {

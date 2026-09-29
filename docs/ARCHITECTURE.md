@@ -113,7 +113,7 @@ A prompt says where the workspace is only when it is drawn where the workspace i
 
 One case is accepted rather than fixed: a tab split between two shells in different directories, where the pane that draws the prompt is not the pane herdr's identity follows. Telling them apart takes a pane list, which is a round-trip on every prompt that moves, and the reconcile corrects the label from `identity_cwd`, which the debounce rule above is written not to get in the way of.
 
-The workspace half runs before the tab half, and hands over the base it applied the way `ar_renumber_workspaces` hands `AR_WS_BASES` to the tab pass. A tab dedupes its context against the workspace base recorded on the tab, which a cd has just moved out from under, so naming the tab first left it reading `project-b > zsh` inside a workspace called `project-b`, at every prompt until a reconcile refreshed the record.
+The workspace half runs before the tab half and hands over its derived base, as `ar_renumber_workspaces` does through `AR_WS_BASES`. The tab uses that base to suppress a repeated branch and records it for the next prompt. Its directory context comes from `ar_context_path` and does not depend on the workspace label.
 
 Which knobs govern this is the workspace's own question, not the tab's: the half runs where `ar_index_pass workspaces` says the reconcile would number or strip, whatever `NAME_TABS` says. preexec skips it, since a cd has landed by the time the prompt is drawn and preexec's `$PWD` is the one the last precmd already saw.
 
@@ -149,11 +149,11 @@ An agent that brands its own titles puts something in front of that glyph, and t
 
 A tab used to say only what was running in it. `nvim` in three checkouts gave three tabs reading `nvim`, and an agent tab reading `claude` said no more. The context is the other half: the directory the pane sits in, in front of the program, joined by `CONTEXT_SEP` (`ar_compose`). It is `TAB_CONTEXT`, default on.
 
-The directory is refused when it says nothing a tab bar has room for: a relative path (herdr reports absolute ones, so this is a value that arrived broken), the filesystem root, and the home directory, which is where a shell sits when it is nowhere in particular.
+`ar_context_path` walks upward from the pane directory. A `.git` directory or file takes priority over language project files beneath it; without Git, the outermost directory with a common language project file is the project root. This keeps the tab context stable when deeper subdirectories contain their own manifests. Outside a project, the current directory is the context. `ar_context_dir` takes only the final path component, including for the home directory. A relative path or filesystem root has no usable component.
 
 A directory too long for `MAX_CONTEXT_LEN` is reduced the way a branch is (`ar_shorten`) rather than cut through the middle: worktrees and branches are named the same way by the same people, so `bugfix-proj-482-fix-rev-discrepancy` reads as `PROJ-482` where a plain cut gives `bugfix-proj-`, which identifies nothing.
 
-**The workspace name is not repeated.** herdr shows the workspace above its tabs, so a tab in the workspace named after its own directory would spend half its width on what is already on screen. `ar_reconcile_tabs` carries each workspace's own label down with its id, strips the `[N]` prefix (what it is compared against is a directory name, and `[1] api` is not one) and hands it to `ar_tab_name`, which passes it to `ar_context_dir`. The compare folds ASCII case. It also treats a worktree as the same place as its workspace: herdr names one after the branch with the convention in front of it stripped, so the directory ends with the workspace's name (`bugfix-proj-482-fix` under `proj-482-fix`). A separator has to sit before the match, or a workspace called `api` would swallow a tab that really is in `legacy-api`. Otherwise the compare is exact, so a tab whose directory has left its workspace behind is exactly the one that keeps saying where it is.
+The directory name remains in the tab label even when it matches the workspace label. The workspace base is still passed into `ar_label` to suppress a branch already visible in the directory or workspace name. Project detection is limited to tab context; `ar_project_base` still follows herdr's `.git` based workspace naming rule.
 
 Each part carries its own budget rather than sharing one: the directory is cut to `MAX_CONTEXT_LEN` (12), the program keeps `MAX_NAME_LEN` (20), an agent's task keeps `MAX_TITLE_LEN` (28). The whole is then bounded by construction and there is no second number to keep in step. An empty activity still empties the whole label, because that is `HIDE_SHELL` asking for no name at all and half a name is not what it asked for.
 
@@ -179,7 +179,7 @@ The whole of it hangs off the program name being `ssh`, in `ar_label`, so no oth
 
 The reconcile is not the only thing that names a tab. The shell hook's fast path renames on every command, so a hook that dropped the context would flip the tab between `api › nvim` and `nvim` on every prompt -- the same flicker the fast path exists to avoid.
 
-It gets both halves without a herdr call. The directory is the hook's own `$PWD`: the hook backgrounds the engine from the pane, so it arrives for free, and a `cd` shows up at the next prompt rather than waiting for an unrelated herdr event. The workspace name to dedupe against is recorded on the tab, in the `ws` field of its state record, by whichever reconcile last named it -- asking herdr for it would be a socket round-trip on every command. A workspace renamed since then leaves that field stale for one pass, and the pass that notices is the one that changes the label anyway, since a dedupe that flips changes what the label should be.
+It gets both halves without a herdr call. The directory is the hook's own `$PWD`: the hook backgrounds the engine from the pane, so it arrives for free, and a `cd` shows up at the next prompt rather than waiting for an unrelated herdr event. The hook resolves the same project root as the reconcile. The workspace base is recorded on the tab for branch suppression, so the hook does not need another herdr call for it.
 
 ### A session with no title
 

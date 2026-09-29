@@ -487,7 +487,7 @@ state=$XDG_STATE_HOME/herdr-automatic-rename/state.json
 check_contains "the workspace moves" "$(log)" "workspace rename w1 [1] project-b"
 check "the tab records the new workspace base" "project-b" \
   "$(jq -r '."w1:t1".ws // ""' "$state" 2>/dev/null)"
-check_absent "and does not repeat it in its own label" "$(log)" "tab rename w1:t1 [1] project-b"
+check_contains "the tab uses the new directory name" "$(log)" "tab rename w1:t1 [1] project-b › zsh"
 teardown
 
 # ======================================================================

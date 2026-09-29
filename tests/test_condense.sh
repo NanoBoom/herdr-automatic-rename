@@ -246,7 +246,7 @@ setup() {
 # off by two characters all passed against the bug they were written for. This
 # compares the label whole.
 check_rename() {
-  local want="tab rename $3 $4" got
+  local want="tab rename $3 api › $4" got
   got=$(printf '%s\n' "$2" | grep -F "tab rename $3 " | head -1)
   check "$1" "$want" "$got"
 }

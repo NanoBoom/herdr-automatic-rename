@@ -692,61 +692,20 @@ HOME_SAVE=$HOME
 HOME=/Users/tester
 check "a project directory names the context" "api" \
   "$(ar_context_dir '/Users/tester/dev/api' 'web')"
-# The home directory and the filesystem root are where a shell sits when it is
-# nowhere in particular, and "tester" or "/" says nothing a tab bar has room for.
-check "the home directory says nothing" "" "$(ar_context_dir '/Users/tester' 'web')"
+check "only the final folder name is used" "works" \
+  "$(ar_context_dir '/usrs/fanlizhou/works' '')"
+# The nearest directory names a tab even when it is HOME.
+check "the home directory uses its basename" "tester" "$(ar_context_dir '/Users/tester' 'web')"
 check "the filesystem root says nothing" "" "$(ar_context_dir '/' 'web')"
 check "no directory at all says nothing" "" "$(ar_context_dir '' 'web')"
 # A relative path is not a directory this plugin can reason about: it is whatever
 # the reader's cwd happens to make it, and herdr reports absolute paths.
 check "a relative path says nothing" "" "$(ar_context_dir 'dev/api' 'web')"
-# herdr shows the workspace above its tabs, so a tab in the workspace named after
-# its own directory spends half its width repeating what is already on screen.
-check "the workspace name is not repeated" "" "$(ar_context_dir '/Users/tester/dev/api' 'api')"
-check "the repeat is matched ignoring ASCII case" "" "$(ar_context_dir '/Users/tester/dev/API' 'api')"
-# ASCII, and only ASCII, whatever locale the process was launched under. herdr
-# may start the plugin with no LC_* while the shell hook inherits the user's
-# UTF-8: a fold that followed the locale would have the two naming paths
-# disagree about this tab, which is a tab that flips on every prompt.
-for _loc in C en_US.UTF-8; do
-  check "non-ASCII case is not folded (LC_ALL=$_loc)" "ÄPI" \
-    "$(LC_ALL=$_loc ar_context_dir '/Users/tester/dev/ÄPI' 'äpi')"
-  check "ASCII case still is (LC_ALL=$_loc)" "" \
-    "$(LC_ALL=$_loc ar_context_dir '/Users/tester/dev/API' 'api')"
-done
-# herdr names a worktree workspace after the branch with the convention in front
-# of it stripped, so its directory ends with the workspace's name and the two are
-# the same place: "bugfix-proj-482-fix" under a workspace called
-# "proj-482-fix" is not a tab that has gone anywhere.
-check "a worktree prefix is the same place" "" \
-  "$(ar_context_dir '/Users/tester/dev/wt/bugfix-proj-482-fix' 'proj-482-fix')"
-check "and the separator is required" "aaaproj-482-fix" \
-  "$(MAX_CONTEXT_LEN=20 ar_context_dir '/Users/tester/dev/wt/aaaproj-482-fix' 'proj-482-fix')"
-# The same place spelled with a different separator. herdr's worktree manager
-# names a workspace after the BRANCH, slashes and all, while the worktree
-# directory the branch is checked out in gets those slashes flattened to
-# hyphens -- so the two say one thing in two spellings, and a compare that read
-# them character for character put the directory back in the tab.
-check "a slash and a hyphen are the same separator" "" \
-  "$(ar_context_dir '/Users/tester/dev/wt/feature-proj-482-fix' 'feature/proj-482-fix')"
-check "so are a dot and an underscore" "" \
-  "$(ar_context_dir '/Users/tester/dev/api_docs' 'api.docs')"
-check "and a worktree prefix across spellings is still the same place" "" \
-  "$(ar_context_dir '/Users/tester/dev/wt/bugfix-proj-482-fix' 'proj/482/fix')"
-# Folding the separators does not weaken the rule that wanted one: what stands
-# between the prefix and the workspace's name must still BE a separator.
-check "the separator is still required across spellings" "aaaproj-482-fix" \
-  "$(MAX_CONTEXT_LEN=20 ar_context_dir '/Users/tester/dev/wt/aaaproj-482-fix' 'proj/482/fix')"
-# The other direction is a different directory, not a prefix convention: a tab in
-# api-docs under a workspace called api has genuinely gone somewhere.
-check "a longer name is not a prefix convention" "api-docs" \
-  "$(ar_context_dir '/Users/tester/dev/api-docs' 'api')"
-# ... and only those, so a tab whose directory has left its workspace
-# behind is exactly the one that keeps saying where it is.
-check "a different directory still shows" "api" "$(ar_context_dir '/Users/tester/dev/api' 'api-docs')"
-# A workspace nobody has named (or a path with no workspace to compare) dedupes
-# against nothing.
-check "no workspace name dedupes nothing" "api" "$(ar_context_dir '/Users/tester/dev/api' '')"
+# The tab keeps its own directory context regardless of the workspace label.
+check "workspace name does not hide the directory" "api" \
+  "$(ar_context_dir '/Users/tester/dev/api' 'api')"
+check "directory spelling is preserved" "API" \
+  "$(ar_context_dir '/Users/tester/dev/API' 'api')"
 check "a trailing slash names the same directory" "api" \
   "$(ar_context_dir '/Users/tester/dev/api/' 'web')"
 # The context gets its own budget: it is a project name, not a sentence, and the
@@ -850,7 +809,7 @@ check "nothing checked out, nothing shown" "" "$(ar_branch_label '' 'main')"
 # herdr shows the workspace above the tabs and the tab shows its own context, so
 # a branch that says the same thing again spends width on what the reader can
 # already see. A worktree named after its branch is the common case.
-check "a branch the workspace already says is dropped" "Herdr auto title" \
+check "a branch the workspace already says is dropped" "auto-title › Herdr auto title" \
   "$(ar_label '/Users/tester/dev/wt/auto-title' 'auto-title' 'auto-title' 'claude' '' 'Herdr auto title')"
 check "a branch the directory already says is dropped" "PROJ-482 › claude" \
   "$(ar_label '/Users/tester/dev/wt/bugfix-proj-482-fix' 'other' 'PROJ-482' 'claude' '')"

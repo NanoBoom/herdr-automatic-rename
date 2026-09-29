@@ -6,14 +6,12 @@
 # arrays, no namerefs. Functions share the ar_ prefix with the engine, which
 # calls ar_label across the module seam.
 #
-# Two environment variables are read for DEFAULTS, both below: $SHELL names the
-# shell a bare prompt is labeled with, and $HOME is the directory ar_context_dir
-# treats as nowhere in particular. Neither is looked up per call.
+# $SHELL supplies the default name of a shell at a bare prompt.
 #
 # Naming rule: a tab is named after its foreground program (nvim, claude, git,
 # ...). At a bare prompt, or while a quick throwaway command runs, it shows the
 # shell name (e.g. zsh) instead -- or nothing at all with HIDE_SHELL=1. Loosely
-# modeled on tmux-window-name, minus the directory-based naming.
+# modeled on tmux-window-name, with directory context in front.
 #
 # Every list below is guarded with `declare -p` rather than `${VAR+x}`, so
 # clearing one in config.sh (e.g. IGNORED_PROGRAMS=()) actually takes effect:
@@ -517,58 +515,23 @@ ar_title_name_prefix() {
   printf '%s:' "$aliased"
 }
 
-# ar_context_dir <pane directory> <workspace base label> -> the directory part of
-# the context, or "" when the directory says nothing worth a tab's width.
+# ar_context_dir <resolved context directory> [workspace base label] -> the
+# directory part of the context, or "" when there is no usable directory name.
 #
-# The BASENAME, not ar_project_base's answer: that walks up to the repository a
-# directory belongs to, which is what herdr names a WORKSPACE after and therefore
-# the one thing a tab in it must not repeat. A tab cd'd into a subdirectory of
-# its project says which subdirectory, where the repository name would say what
-# the sidebar says.
-#
-# Normally the project name, then. Refused: a relative path (whatever
-# the reader's cwd makes of it -- herdr reports absolute ones), the filesystem
-# root, and the home directory, which is where a shell sits when it is nowhere in
-# particular.
-#
-# Also refused: the name of the workspace the tab is in. herdr shows that above
-# the tabs, so a tab there spends half its width repeating what is already on
-# screen. Matched ignoring the case of ASCII letters and which separator a name
-# was built out of (_AR_FOLD_IN), and exactly otherwise -- a tab whose directory
-# has left its workspace behind is exactly the one that keeps saying where it is.
+# The engine resolves the directory to the project root first. This
+# function takes only its last path component, including when it matches the
+# workspace label. The second argument remains accepted for existing callers;
+# it does not affect the directory name. A plain directory, including HOME,
+# names itself. Relative paths and the filesystem root have no usable component.
 ar_context_dir() {
-  local dir=$1 ws=$2 base
+  local dir=$1 base
   AR_CONTEXT=""
   [ "${TAB_CONTEXT:-1}" = "1" ] || return 0
   case $dir in /*) ;; *) return 0 ;; esac
   dir=${dir%/}                        # a trailing slash names the same directory
   [ -n "$dir" ] || return 0           # ... and "/" is left with nothing
-  [ "$dir" = "${HOME%/}" ] && return 0
   base=${dir##*/}
   [ -n "$base" ] || return 0
-  if [ -n "$ws" ]; then
-    # Folded here rather than by the shell's own case-insensitive compare, which
-    # follows the locale: herdr may launch the plugin with no LC_* at all while
-    # the shell hook inherits the user's UTF-8, and then the two naming paths
-    # would disagree about whether a directory repeats its workspace -- which is
-    # a tab that flips on every prompt. ASCII, deterministically, in both.
-    local folded
-    # The exact match is the common one and settles it without folding anything,
-    # which matters because the fold walks a string a character at a time on a
-    # path that runs per tab and again per prompt.
-    [ "$base" = "$ws" ] && return 0
-    ar_case "$base" "$_AR_FOLD_IN" "$_AR_FOLD_OUT"
-    folded=$AR_CASE
-    ar_case "$ws" "$_AR_FOLD_IN" "$_AR_FOLD_OUT"
-    [ "$folded" = "$AR_CASE" ] && return 0
-    # herdr names a worktree workspace after the branch with the convention in
-    # front of it stripped, so the directory ends with the workspace's name and
-    # the two are the same place. The separator is required, or a workspace
-    # called "api" would swallow a tab that really is in "legacy-api" -- and
-    # folding the separators does not weaken that: what stands between the
-    # convention and the name must still BE one, whichever of them was written.
-    case $folded in *-"$AR_CASE") return 0 ;; esac
-  fi
   AR_CONTEXT=$(ar_shorten "$base" "${MAX_CONTEXT_LEN:-12}")
   printf '%s' "$AR_CONTEXT"
 }
@@ -1116,18 +1079,16 @@ ar_branch_new() {
   printf '%s' "$branch"
 }
 
-# ar_label <pane directory> <workspace base> <branch> <program|""> <cmdline> [title]
+# ar_label <resolved context directory> <workspace base> <branch> <program|""> <cmdline> [title]
 #   -> the whole label a tab should carry.
 #
-# The branch arrives as an argument where the directory arrives raw, because
-# reading it is a filesystem walk and this module does not touch the filesystem
-# (see git.sh). So it is the one part a caller has to remember: ar_branch_of next
-# to the engine's two naming paths is what both of them call for it.
+# The engine resolves the context directory and reads the branch before calling
+# this pure module (see git.sh). Both naming paths must make those reads.
 #
 # The one entry point for naming a tab. Both callers -- the reconcile and the
 # shell hook's fast path -- go through it, so neither can skip a step the other
 # takes: a label they disagree about is a tab that flips on every prompt. That is
-# why the raw directory comes in rather than a context computed outside.
+# why the resolved directory comes in rather than a context computed outside.
 ar_label() {
   local ctx
   # A pane running ssh is named after the machine it reached, and after nothing
