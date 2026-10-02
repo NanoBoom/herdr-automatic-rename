@@ -1,9 +1,9 @@
-# herdr-automatic-rename: live per-command tab auto-naming (bash).
+# herdr-automatic-rename: live per-command tab and pane auto-naming (bash).
 #
-# herdr has no "foreground command changed" event, so this hook drives the
-# real-time updates: preexec names the tab after the starting command, precmd
-# names it after the shell once back at the prompt. Everything else (tab
-# switches, numbering, agents) comes from the plugin's herdr [[events]].
+# herdr has no "foreground command changed" event, so these hooks update pane
+# activity when a command starts and when its own shell returns to the prompt.
+# Combined tab labels also follow those commands; directory tab labels follow
+# the current directory. Delivered agent and lifecycle events reconcile panes.
 #
 # bash has no native preexec, and the DEBUG trap + PROMPT_COMMAND are SHARED,
 # exclusive resources that tools like atuin, bash-preexec, ble.sh and starship

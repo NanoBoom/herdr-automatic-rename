@@ -11,6 +11,7 @@ MOCK="$here/mocks/herdr"
 SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-dironly.XXXXXX")
 export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
 export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"
+export NAME_PANES=0
 export HERDR_BIN_PATH="$MOCK" XDG_STATE_HOME="$SB/state"
 export HERDR_AUTOMATIC_RENAME_CONFIG="$SB/none.sh"
 export HERDR_SOCKET_PATH="$SB/herdr.sock"

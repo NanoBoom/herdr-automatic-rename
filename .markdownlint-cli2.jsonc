@@ -4,7 +4,7 @@
     ".github/markdownlint-rules/no-em-dash.js"
   ],
   "globs": ["**/*.md"],
-  "ignores": ["tmp/**", "plans/**", ".claude/**", "node_modules/**"],
+  "ignores": ["tmp/**", "plans/**", ".prp/**", ".claude/**", "node_modules/**"],
   "config": {
     "default": true,
     // Prose is never hard-wrapped here, so a line-length cap is the one thing

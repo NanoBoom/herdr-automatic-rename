@@ -18,6 +18,7 @@ REPO=$(cd "$here/.." && pwd)
 # of the real one, its fixtures and log in a temp directory, state alongside them,
 # and tab and pane ids that exist nowhere.
 HOOKS_SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-hooks.XXXXXX")
+export NAME_PANES=0
 export HERDR_BIN_PATH="$here/mocks/herdr"
 export HERDR_MOCK_DIR="$HOOKS_SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
 export HERDR_MOCK_LOG="$HOOKS_SB/renames.log"; : >"$HERDR_MOCK_LOG"
@@ -88,11 +89,18 @@ clswait() { # poll until the log has 2 lines (or ~1s passes)
 }
 
 clsbox hook.bash
+# Classify through the framework path: the standalone DEBUG trap is already
+# tested interactively above. Keep the launching shell alive until both async
+# calls finish; waiting after it exits races bash subshell teardown on macOS.
 # The quoted program runs in the SPAWNED shell, so its $variables are that
 # shell's to expand, not this one's.
 # shellcheck disable=SC2016
-HERDR_PANE_ID=x HAL_HOOK="$CLS_SB/shell/hook.bash" /usr/bin/env bash -c \
-  'source "$HAL_HOOK"; l() { :; }; _har_preexec "l"; _har_preexec "ls -a"; wait' 2>/dev/null
+HERDR_PANE_ID=x HAL_HOOK="$CLS_SB/shell/hook.bash" CLS_LOG="$CLS_LOG" /usr/bin/env bash -c \
+  'preexec_functions=(); source "$HAL_HOOK"; l() { :; }; _har_preexec "l"; _har_preexec "ls -a";
+    for ((i=0; i<100; i++)); do
+      [ "$(grep -c . "$CLS_LOG")" -ge 2 ] && break
+      sleep 0.05
+    done' 2>/dev/null
 got=$(clswait)
 check_contains "bash: function word marked shell"     "$got" "preexec l shell"
 check_contains "bash: external command left instant"  "$got" "preexec ls -a"

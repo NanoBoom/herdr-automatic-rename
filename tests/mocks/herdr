@@ -97,9 +97,17 @@ case "$group" in
   pane)
     case "$action" in
       list) serve panes.json '{"result":{"panes":[]}}' ;;
+      get)
+        printf '%s\n' "$1" >>"$log.paneget"
+        serve "pane_$1.json" '{}' ;;
+      rename)
+        printf 'pane rename %s %s\n' "$1" "$2" >>"$log"
+        [ "${HERDR_MOCK_FAIL_RENAME:-0}" = "1" ] && exit 1 ;;
+
       process-info)
         p=""
         while [ $# -gt 0 ]; do case "$1" in --pane) p="$2"; shift 2 ;; *) shift ;; esac; done
+        printf '%s\n' "$p" >>"$log.procinfo"
         serve "procinfo_$p.json" '{}' ;;
     esac ;;
   agent)

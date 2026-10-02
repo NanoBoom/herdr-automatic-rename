@@ -367,4 +367,8 @@ check "unreadable store: record untouched" "true" "$(ar_state_get tC enabled)"
 AR_STATE_ROWS_BAD=""
 AR_STATE_ROWS_LOADED=""
 
+ar_state_set "pane:terminal" nvim true
+ar_state_prune t1
+check "tab prune preserves pane namespace" nvim "$(ar_state_get 'pane:terminal' auto)"
+
 t_summary

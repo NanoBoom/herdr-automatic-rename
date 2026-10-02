@@ -2,6 +2,14 @@
 
 For usage, see the [README](../README.md).
 
+## Pane ownership and activity
+
+Pane labels have independent ownership under `pane:<terminal_id>` in the session state store. The terminal identity survives moves; the current pane ID is only the CLI rename target. Empty labels are adopted, unchanged owned labels keep updating, and every first-seen nonempty label is manual. A later edit opts out until the label is cleared. Each ownership namespace prunes only its own records, and a failed, partial, or empty pane read never removes pane records.
+
+The pane formatter shows the invoked foreground program, the actual prompt shell, or a detected agent and its meaningful task joined by `：`. It does not use tab presentation rules. Tasks reuse title normalization and rejection, try independently reported metadata after a refused terminal title, and optionally use the existing Claude transcript reader. A detected untitled agent keeps its name without process sampling. Missing or ambiguous process data keeps the last label.
+
+Full reconciliation covers every split and background pane through snapshot or list fallback. Hooks query their launch-time pane alias to obtain its current pane and terminal IDs, then update only that terminal. Preexec trusts an external command or samples shell constructs after settling; precmd positively identifies its own shell and discards stale agent metadata. Pane hooks run regardless of tab ownership or directory mode. Agent status and lifecycle events refresh task labels; title changes alone wait for the next reconcile. `--clear` removes only still-matching owned pane labels and deletes their records after successful clearing.
+
 ## One reconcile, one entry point
 
 `automatic-rename.sh` runs for every herdr event, both plugin actions, and the shell hooks' fast path. It routes through `ar_run` and dispatches on `argv[1]`. A full reconcile pulls workspaces, tabs, panes, and agents from one `herdr api snapshot` (a single socket call, herdr >= 0.7.2), computes the label every item should have, and issues one rename per item whose label is wrong. Older herdr with no `api snapshot` falls back to `workspace list`, `pane list`, and `agent list` once each plus `tab list` per workspace. Directory-only labels use pane paths and need no foreground process lookup. Combined labels may use `pane process-info` because the snapshot does not carry each pane's foreground process.

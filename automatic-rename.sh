@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# herdr-automatic-rename - one plugin, two toggleable features:
+# herdr-automatic-rename - one plugin with independent naming and numbering toggles:
 #
 #   NAME_TABS=1   auto-name each tab after its project or current directory
 #                 (manual renames opt a tab out). Applies to tabs only.
+#   NAME_PANES=1 auto-name each pane after its program, shell, or agent task
+#                 (manual labels opt out; clearing them resumes naming).
 #   AUTO_INDEX=1  prefix each workspace, tab, and agent with the 1-9 number of
 #                 its jump keybind (switch_workspace/switch_tab/focus_agent) as
 #                 "[N] <base>". Per-scope overrides AUTO_INDEX_WORKSPACES,
@@ -29,8 +31,8 @@
 # the exception, and only because they were already stripped this way whenever
 # NAME_TABS was on.
 #
-# Both default on and are configured in config.sh ($HERDR_AUTOMATIC_RENAME_CONFIG). A
-# single unified reconcile drives both: one pass computes a tab's base name and
+# These default on and are configured in config.sh ($HERDR_AUTOMATIC_RENAME_CONFIG). A
+# single unified reconcile drives them: one pass computes a tab's base name and
 # its "[N]" prefix together and issues one rename per item, so a brand-new tab
 # settles at "[3] zsh" in a single rename with no placeholder flicker.
 #
@@ -680,7 +682,7 @@ ar_state_seed() {
 }
 
 # ======================================================================
-# naming state (atomic temp+mv; jq keyed by tab_id; only NAME_TABS uses it)
+# naming state (atomic temp+mv; independent tab, workspace and pane keys)
 # ======================================================================
 # ar_state_read -> the state object as JSON, or "{}" when the file is missing OR
 # unparseable. The two are the same answer: nothing is known about any tab. They
@@ -925,7 +927,7 @@ ar_state_prune() { # <keep tab_ids...> - drop entries for tabs that no longer ex
   # derivation, and opted itself out of tracking for good -- issue #13 again, one
   # layer down. Each kind prunes its own keys and leaves the other's alone.
   pruned=$(printf '%s' "$base" | jq -c --argjson keep "$keep" \
-    'with_entries(select((.key | startswith("ws:")) or (.key as $k | $keep | index($k))))' \
+    'with_entries(select((.key | startswith("ws:") or startswith("pane:")) or (.key as $k | $keep | index($k))))' \
     2>/dev/null) || return 0
   # Write only when something was dropped. This runs on every event, and a pass
   # that prunes nothing is the steady state, so rewriting the file here made the
@@ -1207,6 +1209,167 @@ ar_pane_program() {
         (($p.cmdline // (($p.argv // []) | join(" "))) | clean)
       end
   ' 2>/dev/null
+}
+
+# Pane records belong to the terminal, while CLI mutations target its current pane.
+# Unlike tab placeholders, every nonempty first-seen pane label is manual.
+ar_pane_eligible() { # <key> <label> <trace context>
+  local enabled auto unused
+  ar_state_rows
+  [ -z "${AR_STATE_ROWS_BAD:-}" ] || { ar_trace "$3 state unreadable: left alone"; return 1; }
+  IFS=$AR_ROW_SEP read -r enabled auto unused <<< "$(ar_state_fields "$1")"
+  AR_PANE_ENABLED=$enabled
+  AR_PANE_AUTO=$auto
+  if [ -z "$2" ]; then
+    ar_trace "$3 empty label: adopt"
+    return 0
+  elif [ "$enabled" = "true" ] && [ "$2" = "$auto" ]; then
+    ar_trace "$3 owned unchanged: [$2]"
+    return 0
+  fi
+  ar_trace "$3 manual label: [$2], left alone"
+  if [ "$enabled" != "false" ]; then
+    ar_state_set "$1" "" false || ar_trace "$3 opt-out state write failed"
+  fi
+  return 1
+}
+
+ar_pane_apply() { # <pane id> <terminal id> <label> <desired> <tab id>
+  local key="pane:$2" ctx="$5 pane:$2 ($1)" base tmp
+  [ -n "$1" ] && [ -n "$2" ] || { ar_trace "$ctx missing pane or terminal identity"; return 0; }
+  if [ "${CLEAR:-0}" = "1" ]; then
+    ar_state_rows
+    [ -z "${AR_STATE_ROWS_BAD:-}" ] || { ar_trace "$ctx state unreadable: left alone"; AR_PANE_CLEAR_FAILED=1; return 0; }
+    local enabled auto unused
+    IFS=$AR_ROW_SEP read -r enabled auto unused <<< "$(ar_state_fields "$key")"
+    [ "$enabled" = "true" ] && [ "$3" = "$auto" ] && [ -n "$3" ] \
+      || { ar_trace "$ctx clear skipped: label is not owned"; return 0; }
+    "$HERDR" pane rename "$1" --clear >/dev/null 2>&1 \
+      || { ar_trace "$ctx clear failed"; AR_PANE_CLEAR_FAILED=1; return 0; }
+    # Delete only after the CLI confirms clearing. Keep failure observable.
+    base=$(ar_state_read) || { ar_trace "$ctx cleared, state read failed"; AR_PANE_CLEAR_FAILED=1; return 0; }
+    tmp=$(mktemp "$STATE_DIR/.state.XXXXXX") || { ar_trace "$ctx cleared, state write failed"; AR_PANE_CLEAR_FAILED=1; return 0; }
+    AR_STATE_ROWS_LOADED=""
+    if printf '%s' "$base" | jq --arg k "$key" 'del(.[$k])' >"$tmp" && mv "$tmp" "$STATE_FILE"; then
+      ar_trace "$ctx owned label cleared"
+    else
+      rm -f "$tmp"
+      ar_trace "$ctx cleared, state write failed"
+      AR_PANE_CLEAR_FAILED=1
+    fi
+    return 0
+  fi
+  ar_pane_eligible "$key" "$3" "$ctx" || return 0
+  [ -n "$4" ] || { ar_trace "$ctx no reliable activity: left alone"; return 0; }
+  if [ "$3" != "$4" ]; then
+    "$HERDR" pane rename "$1" "$4" >/dev/null 2>&1 \
+      || { ar_trace "$ctx rename failed: [$4]"; return 0; }
+    ar_trace "$ctx rename issued: [$3] -> [$4]"
+  else
+    ar_trace "$ctx label already correct: [$4]"
+  fi
+  if [ "$AR_PANE_ENABLED" != "true" ] || [ "$AR_PANE_AUTO" != "$4" ]; then
+    ar_state_set "$key" "$4" true || ar_trace "$ctx ownership state write failed"
+  fi
+}
+
+ar_pane_name() { # <pane id> <trace context> -> activity label
+  local title="" metadata row info
+  ar_pane_facts "$1"
+  if [ -n "$AR_PANE_AGENT" ]; then
+    if [ "${AGENT_TITLES:-1}" = "1" ]; then
+      title=$(ar_title_clean "$AR_PANE_TITLE" "$AR_PANE_TITLE_LC" "$AR_PANE_DIR_LC" "$AR_PANE_AGENT")
+      if [ -z "$title" ]; then
+        ar_trace "$2 terminal title refused or absent: [$AR_PANE_TITLE]"
+        row=$(printf '%s' "$AR_PANES_JSON" | jq -r --arg p "$1" --arg brands "${AR_TITLE_BRANDS:-}" "$AR_JQ_CLEAN$AR_JQ_TASK"'
+          ($brands | brandmap) as $brand | (.result.panes // .panes)[]
+          | select(.pane_id == $p) | . as $pane | (.title | taskof($brand; $pane.agent))
+          | [., ascii_downcase] | join([31] | implode)') || return 1
+        IFS=$AR_ROW_SEP read -r metadata AR_PANE_TITLE_LC <<< "$row"
+        title=$(ar_title_clean "$metadata" "$AR_PANE_TITLE_LC" "$AR_PANE_DIR_LC" "$AR_PANE_AGENT")
+      fi
+      if [ -z "$title" ] && [ -n "$AR_PANE_SESSION" ] \
+         && ar_transcript_topic "$AR_PANE_AGENT" "$AR_PANE_SESSION" "$AR_PANE_DIR"; then
+        title=$(ar_title_clean "$AR_TRANSCRIPT_TOPIC" "$AR_TRANSCRIPT_TOPIC_LC" "$AR_PANE_DIR_LC" "$AR_PANE_AGENT")
+        [ -n "$title" ] && ar_trace "$2 transcript topic used: [$title]"
+      fi
+    fi
+    ar_trace "$2 agent [$AR_PANE_AGENT] task [$title]"
+    ar_pane_label "" "" "$AR_PANE_AGENT" "$title"
+    return
+  fi
+  info=$(ar_pane_program "$1") || { ar_trace "$2 process-info failed"; return 1; }
+  ar_split_program "$info"
+  [ -n "$AR_PROG" ] || { ar_trace "$2 no unambiguous foreground program"; return 1; }
+  ar_pane_label "$AR_PROG" "" "" ""
+}
+
+ar_state_prune_panes() { # <complete pane list>
+  local keep base pruned tmp
+  keep=$(printf '%s' "$1" | jq -c '[ (.result.panes // .panes)[] | .terminal_id | strings | select(length > 0) | "pane:" + . ]') || return 0
+  [ "$keep" != '[]' ] || return 0
+  base=$(ar_state_read) || { ar_trace "pane pruning state unreadable"; return 0; }
+  pruned=$(printf '%s' "$base" | jq -c --argjson keep "$keep" \
+    'with_entries(select((.key | startswith("pane:") | not) or (.key as $k | $keep | index($k))))') || return 0
+  [ "$pruned" != "$base" ] || return 0
+  tmp=$(mktemp "$STATE_DIR/.state.XXXXXX") || { ar_trace "pane pruning state write failed"; return 0; }
+  AR_STATE_ROWS_LOADED=""
+  if ! printf '%s' "$pruned" >"$tmp" || ! mv "$tmp" "$STATE_FILE"; then
+    rm -f "$tmp"
+    ar_trace "pane pruning state write failed"
+  fi
+}
+
+ar_reconcile_panes() {
+  local rows pane terminal label tab want
+  printf '%s' "${AR_PANES_JSON:-}" | jq -e '
+    (.result.panes // .panes) as $p | ($p | type) == "array"
+    and all($p[]; type == "object" and (.pane_id | type) == "string"
+      and (.pane_id | length) > 0)' >/dev/null 2>&1 \
+    || { ar_trace "pane list failed or malformed: naming and pruning skipped"; [ "${CLEAR:-0}" = "1" ] && AR_PANE_CLEAR_FAILED=1; return 0; }
+  rows=$(printf '%s' "$AR_PANES_JSON" | jq -r "$AR_JQ_CLEAN"'
+    (.result.panes // .panes)[] | [.pane_id, (.terminal_id | if type == "string" then . else "" end), .label, .tab_id] | map(clean) | join([31] | implode)') || return 0
+  while IFS=$AR_ROW_SEP read -r pane terminal label tab; do
+    [ -n "$pane" ] || continue
+    [ -n "$terminal" ] || { ar_trace "$tab pane $pane missing terminal identity"; continue; }
+    # Eligibility before sampling keeps manual labels cheap and untouched.
+    want=""
+    if [ "${CLEAR:-0}" != "1" ]; then
+      ar_pane_eligible "pane:$terminal" "$label" "$tab pane:$terminal ($pane)" || continue
+      want=$(ar_pane_name "$pane" "$tab pane:$terminal ($pane)") || want=""
+    fi
+    ar_pane_apply "$pane" "$terminal" "$label" "$want" "$tab"
+  done <<< "$rows"
+  # Missing terminal identities mean ownership cannot be considered complete.
+  if printf '%s' "$AR_PANES_JSON" | jq -e 'all((.result.panes // .panes)[]; (.terminal_id | type) == "string" and (.terminal_id | length) > 0)' >/dev/null; then
+    ar_state_prune_panes "$AR_PANES_JSON"
+  else
+    ar_trace "pane list missing terminal identity: pruning skipped"
+  fi
+}
+
+ar_fast_pane() {
+  local alias="${HERDR_PANE_ID:-}" raw row pane terminal label tab want info prog
+  [ -n "$alias" ] || { ar_trace "fast pane: no HERDR_PANE_ID"; return 0; }
+  raw=$("$HERDR" pane get "$alias" 2>/dev/null) || { ar_trace "fast pane $alias get failed"; return 0; }
+  printf '%s' "$raw" | jq -e '(.result.pane // .pane) | type == "object" and (.pane_id | type) == "string" and (.terminal_id | type) == "string" and (.pane_id | length) > 0 and (.terminal_id | length) > 0' >/dev/null 2>&1 \
+    || { ar_trace "fast pane $alias missing identity"; return 0; }
+  row=$(printf '%s' "$raw" | jq -r "$AR_JQ_CLEAN"'(.result.pane // .pane)
+    | [.pane_id, .terminal_id, .label, .tab_id] | map(clean) | join([31] | implode)') || return 0
+  IFS=$AR_ROW_SEP read -r pane terminal label tab <<< "$row"
+  ar_pane_eligible "pane:$terminal" "$label" "$tab pane:$terminal ($pane)" || return 0
+  if [ "$MODE" = "precmd" ]; then
+    want=$(ar_pane_label "" "$SHELL_NAME" "" "") || return 0
+  elif [ "${AR_FAST_SAMPLE:-}" = "1" ]; then
+    info=$(ar_pane_program "$pane") || { ar_trace "$tab pane:$terminal sampling failed"; return 0; }
+    ar_split_program "$info"
+    [ -n "$AR_PROG" ] || { ar_trace "$tab pane:$terminal no sampled foreground program"; return 0; }
+    want=$(ar_pane_label "$AR_PROG" "" "" "") || return 0
+  else
+    prog=${AR_FAST_ARG%% *}; prog=${prog##*/}
+    want=$(ar_pane_label "$prog" "" "" "") || return 0
+  fi
+  ar_pane_apply "$pane" "$terminal" "$label" "$want" "$tab"
 }
 
 # ar_branch_of <directory> -> what the branch checked out there contributes to a
@@ -2424,8 +2587,8 @@ label: $label"
     printf 'trace, the whole pass:\n'
     cat "$AR_TRACE_FILE" 2>/dev/null
   fi
-  printf '\nknobs: NAME_TABS=%s AUTO_INDEX=%s TAB_CONTEXT=%s AGENT_TITLES=%s HIDE_SHELL=%s HOST_PREFIX=%s\n' \
-    "${NAME_TABS:-1}" "${AUTO_INDEX:-1}" "${TAB_CONTEXT:-1}" "${AGENT_TITLES:-1}" "${HIDE_SHELL:-0}" "${HOST_PREFIX:-0}"
+  printf '\nknobs: NAME_TABS=%s NAME_PANES=%s AUTO_INDEX=%s TAB_CONTEXT=%s AGENT_TITLES=%s HIDE_SHELL=%s HOST_PREFIX=%s\n' \
+    "${NAME_TABS:-1}" "${NAME_PANES:-1}" "${AUTO_INDEX:-1}" "${TAB_CONTEXT:-1}" "${AGENT_TITLES:-1}" "${HIDE_SHELL:-0}" "${HOST_PREFIX:-0}"
   if [ -n "$tab" ]; then ar_notify "Doctor: $tab" "$head"
   else ar_notify "Doctor: no tab resolved" "$head"
   fi
@@ -2435,9 +2598,8 @@ label: $label"
 # passes
 # ======================================================================
 
-# Full reconcile of every list. Each pass consults its own toggle to decide
-# whether to number or to strip; --clear ignores the toggles and strips
-# everything (the uninstall path).
+# Full reconcile of every list. Each pass consults its own naming/index toggle.
+# --clear strips prefixes and removes unchanged owned pane labels for uninstall.
 ar_reconcile() {
   local wsjson snap
   # A reset deletes the target tab's state once (under the lock) so it re-adopts.
@@ -2459,7 +2621,8 @@ ar_reconcile() {
   # agent slices for ar_reconcile_tabs / ar_renumber_agents. Any failure (older
   # herdr with no `api snapshot`, a socket hiccup) falls back to the separate list
   # calls, so this never raises the plugin's min herdr version. Combined labels
-  # still sample foreground processes where needed; directory-only labels do not.
+  # still sample foreground processes where needed; pane labels sample non-agents.
+  AR_PANES_JSON=""
   AR_HAVE_SNAPSHOT=0
   AR_SNAP_TABS_JSON=""
   AR_SNAP_AGENTS_JSON=""
@@ -2520,10 +2683,10 @@ ar_reconcile() {
     # Lifted whatever the toggles say, because the workspace pass wants them as
     # well (ar_workspace_pane_dirs) and the snapshot is already in hand: one jq
     # over memory, no herdr call. The per-list path below still fetches only when
-    # tab naming needs it, since there a pane list is a round-trip.
-    if ar_ws_derives; then
+    # tab, workspace, or pane naming needs it, since a list is a round-trip.
+    if ar_ws_derives || [ "${NAME_PANES:-1}" = "1" ] || [ "$CLEAR" = "1" ]; then
       AR_PANES_JSON=$(printf '%s' "$snap" | jq -c \
-        '{result:{panes:((.result.snapshot // .snapshot).panes // [])}}' 2>/dev/null)
+        '{result:{panes:(.result.snapshot // .snapshot).panes}}' 2>/dev/null)
       [ -n "$AR_PANES_JSON" ] || AR_PANES_JSON='{"result":{"panes":[]}}'
     fi
   else
@@ -2534,8 +2697,9 @@ ar_reconcile() {
     # and how a rename the prompt just applied is told from one session.json is
     # merely late in reporting. Here that is a round-trip rather than a jq over
     # the snapshot, so it is still asked for only where a pass will read it.
-    if ar_ws_derives && { [ "$NAME_TABS" = "1" ] || ar_ws_pass; }; then
-      AR_PANES_JSON=$("$HERDR" pane list 2>/dev/null) || AR_PANES_JSON='{"result":{"panes":[]}}'
+    if { ar_ws_derives && { [ "$NAME_TABS" = "1" ] || ar_ws_pass; }; } \
+       || [ "${NAME_PANES:-1}" = "1" ] || [ "$CLEAR" = "1" ]; then
+      AR_PANES_JSON=$("$HERDR" pane list 2>/dev/null) || AR_PANES_JSON=""
     fi
   fi
   # ar_index_pass decides which of these have work to do (numbering, or the
@@ -2560,6 +2724,9 @@ ar_reconcile() {
   if ar_index_pass agents; then
     ar_renumber_agents
   fi
+  if [ "${NAME_PANES:-1}" = "1" ] || [ "$CLEAR" = "1" ]; then
+    ar_reconcile_panes
+  fi
   # The force was for this pass. ar_run can loop the reconcile when events land
   # while it runs, and a tab still forced on a later loop is a tab whose opt-out
   # check is still bypassed: rename it by hand inside that window and the next loop
@@ -2569,7 +2736,7 @@ ar_reconcile() {
   AR_FORCE_TAB=""
 }
 
-# Fast path for the shell hooks: rename only the current tab (no cross-tab work).
+# Fast path for the shell hooks: update the calling tab and pane.
 # preexec passes the command line; precmd (back at the prompt) names by the shell.
 # Preserves the existing "[N]" prefix when tab numbering is on, drops it when off.
 #
@@ -2590,6 +2757,7 @@ ar_fast_once() {
   AR_FAST_WS=""
   [ "$MODE" = "precmd" ] && ar_fast_workspace
   [ "$NAME_TABS" = "1" ] && ar_fast_tab
+  [ "${NAME_PANES:-1}" = "1" ] && ar_fast_pane
   return 0
 }
 
@@ -2870,6 +3038,7 @@ ar_main() {
   # overrides and their shared default are read straight from the config by
   # ar_index_on and ar_index_explicit.
   : "${NAME_TABS:=1}"
+  : "${NAME_PANES:=1}"
 
   MODE="${1:-event}"
   CLEAR=0
@@ -2877,14 +3046,14 @@ ar_main() {
 
   case "$MODE" in
     preexec)
-      [ "$NAME_TABS" = "1" ] || exit 0
+      { [ "$NAME_TABS" = "1" ] || [ "$NAME_PANES" = "1" ]; } || exit 0
       AR_FAST_ARG="${2:-}"                    # the command line being run
       # $3 = "shell": the hook resolved the command word to a shell construct
       # (function/builtin/reserved/typo), which never becomes the foreground
       # process. Give the construct a moment to finish or spawn its real
       # program, then name by what actually holds the pane (see ar_fast_once).
       # The settle sleep runs BEFORE ar_run so the lock is never held asleep.
-      if [ "${3:-}" = "shell" ] && [ "${TAB_NAME_DIRECTORY_ONLY:-1}" != "1" ]; then
+      if [ "${3:-}" = "shell" ] && { [ "${TAB_NAME_DIRECTORY_ONLY:-1}" != "1" ] || [ "$NAME_PANES" = "1" ]; }; then
         AR_FAST_SAMPLE=1
         sleep 0.2 2>/dev/null || true
       fi
@@ -2893,7 +3062,7 @@ ar_main() {
     precmd)
       # The workspace half runs whether or not tabs are named: which knobs govern
       # a workspace label are the workspace's own (see ar_fast_workspace).
-      { [ "$NAME_TABS" = "1" ] || ar_ws_pass; } || exit 0
+      { [ "$NAME_TABS" = "1" ] || [ "$NAME_PANES" = "1" ] || ar_ws_pass; } || exit 0
       # Optional 2nd arg = the calling shell's own name, so a bare prompt in a
       # bash/fish pane reads "bash"/"fish" instead of $SHELL (the login shell).
       # Absent (a bare `precmd` from an older caller) -> keep the SHELL_NAME
@@ -2966,7 +3135,11 @@ ar_main() {
       ;;
     clear|--clear)
       if ar_run full action; then            # CLEAR=1 already set above
-        ar_notify "Number prefixes cleared" "Base names restored, agents back to detection."
+        if [ -n "${AR_PANE_CLEAR_FAILED:-}" ]; then
+          ar_notify "Clear incomplete" "Number prefixes cleared; some owned pane labels or records could not be cleared."
+        else
+          ar_notify "Prefixes and owned pane labels cleared" "Base names restored, agents back to detection; unchanged owned pane labels removed."
+        fi
       else
         ar_notify "Clear is waiting" "Another naming pass held the lock. Try again."
       fi

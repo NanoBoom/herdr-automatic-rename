@@ -1,10 +1,9 @@
-# herdr-automatic-rename: live per-command tab auto-naming (fish).
+# herdr-automatic-rename: live per-command tab and pane auto-naming (fish).
 #
-# herdr has no "foreground command changed" event, so this hook drives the
-# real-time updates via fish's native events: fish_preexec fires right before a
-# command runs (with the command line in $argv[1]), fish_postexec fires when
-# back at the prompt. Everything else (tab switches, numbering, agents) comes
-# from the plugin's herdr [[events]].
+# herdr has no "foreground command changed" event, so these hooks update pane
+# activity when a command starts and when its own shell returns to the prompt.
+# Combined tab labels also follow those commands; directory tab labels follow
+# the current directory. Delivered agent and lifecycle events reconcile panes.
 #
 # Source this from your fish config (~/.config/fish/config.fish):
 #   source /path/to/herdr-automatic-rename/shell/hook.fish

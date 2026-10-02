@@ -1,11 +1,9 @@
-# herdr-automatic-rename: live per-command tab auto-naming (zsh).
+# herdr-automatic-rename: live per-command tab and pane auto-naming (zsh).
 #
-# herdr has no "foreground command changed" event, so these zsh hooks give the
-# real-time updates: preexec renames the tab after the command that is starting,
-# precmd renames it after the shell name once back at the prompt. The plugin's
-# herdr [[events]] handle everything else (tab switches, new tabs, agents,
-# numbering). A lock in the engine keeps the hook and events from racing, and the
-# engine honors the NAME_TABS toggle (this hook stays dumb).
+# herdr has no "foreground command changed" event, so these hooks update pane
+# activity when a command starts and when its own shell returns to the prompt.
+# Combined tab labels also follow those commands; directory tab labels follow
+# the current directory. Delivered agent and lifecycle events reconcile panes.
 #
 # Source this from your zsh startup (point at wherever the plugin lives):
 #   source /path/to/herdr-automatic-rename/shell/hook.zsh
