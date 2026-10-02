@@ -137,7 +137,7 @@ chmod +x "$SB/bin/cat"
 : >"$HERDR_MOCK_LOG"
 PATH="$SB/bin:$PATH" run
 check 'unreadable state causes no pane mutation' '' "$(log)"
-check_contains 'unreadable state traced' "$(cat "$AR_TRACE_FILE")" 'state unreadable: left alone' 
+check_contains 'unreadable state traced' "$(cat "$AR_TRACE_FILE")" 'state unreadable: left alone'
 cleanup
 
 setup
