@@ -4,6 +4,10 @@ All notable changes to herdr-automatic-rename are documented here. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- Automatic pane labels show the current program, actual prompt shell, or detected agent with a meaningful task (`codex：添加pane自动命名功能`). Split and background panes update independently of tab naming. `NAME_PANES=0` disables new pane renames; manual labels are preserved, clearing a label resumes automation, and terminal ownership follows pane moves. Shell hooks update commands immediately and delivered agent/lifecycle events refresh tasks. Doctor reports pane decisions, and `--clear` removes unchanged owned pane labels.
+
 ### Changed
 
 - Tab auto-naming now shows only the project directory or current folder name, with the existing optional jump-key number. Git and language project markers keep the name stable in deeper directories. `TAB_NAME_DIRECTORY_ONLY=0` restores combined program, branch, and agent-title labels.

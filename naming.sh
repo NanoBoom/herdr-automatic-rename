@@ -1142,6 +1142,29 @@ ar_label() {
   ar_compose "$ctx" "$AR_BRANCH_NEW" "$AR_ACTIVITY"
 }
 
+# ar_pane_label <program> <prompt shell> <detected agent> <cleaned task>
+# Pane activity has its own budgets and never inherits tab presentation rules.
+ar_pane_label() {
+  local prog=$1 shell=$2 agent=$3 task=$4 name max
+  prog=${prog##*/}; prog=${prog#-}
+  name=$(printf '%s' "${agent:-${prog:-$shell}}" | jq -Rrs \
+    'gsub("[[:cntrl:][:space:]]+"; " ") | sub("^ +"; "") | sub(" +$"; "")') || return 1
+  [ -n "$name" ] || return 1
+  if [ -n "$agent" ]; then
+    task=$(printf '%s' "$task" | jq -Rrs \
+      'gsub("[[:cntrl:][:space:]]+"; " ") | sub("^ +"; "") | sub(" +$"; "")') || return 1
+    max=${MAX_TITLE_LEN:-28}
+    if [ -n "$task" ] && [ "$max" -gt 0 ]; then
+      ar_fits "$task" "$max" || task=$(ar_trunc "$task" "$max")
+      name="${name}：${task}"
+    fi
+  else
+    max=${MAX_NAME_LEN:-20}
+    ar_fits "$name" "$max" || name=$(ar_trunc "$name" "$max")
+  fi
+  printf '%s' "$name"
+}
+
 # ar_format <program|""> <cmdline> [title] -> final tab label
 #   program == "" means a bare prompt (name by the shell).
 ar_format() {

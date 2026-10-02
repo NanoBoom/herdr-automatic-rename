@@ -12,7 +12,7 @@ By default, herdr names new tabs with plain numbers. It's difficult to know what
 
 ### After
 
-This plugin names a tab after its project directory. Moving into a subdirectory keeps that name. Outside a project, the tab follows the current folder:
+This plugin names panes after their current program, prompt shell, or agent task, and a tab after its project directory. Moving into a subdirectory keeps that name. Outside a project, the tab follows the current folder:
 
 `  [1] api  `‎‎‎ ‎ ‎ `  [2] website  ` ‎ ‎ ‎‎‎`  [3] works  `‎‎‎ ‎ ‎ +
 
@@ -126,7 +126,19 @@ description = "hand this tab's name back to automatic naming"
 - Combined-label mode needs herdr's foreground process detection. Some Linux containers and sandboxes hide it; on herdr `>= 0.8.0`, set `HERDR_PROCESS_DETECTION=child-groups` in herdr's environment.
 - Below herdr `0.7.4`, a new name only shows at the next redraw, such as a focus change.
 
+## Pane activity labels
+
+Each pane is named independently of its tab: `nvim` for an editor, `zsh`, `bash`, or `fish` at that shell's prompt, and `codex：添加pane自动命名功能` for an agent with a meaningful task. An agent without a task shows its detected name, such as `claude`. Split panes and panes in background tabs each resolve their own activity.
+
+Pane naming defaults to `NAME_PANES=1`. Set `NAME_PANES=0` in `config.sh` to stop new pane renames and retain the existing labels. Tab settings for directory context, icons, aliases, arguments, ignored programs, and hidden shells do not change pane labels. `MAX_NAME_LEN` caps program labels; `MAX_TITLE_LEN` caps the task after the agent prefix. `AGENT_TITLES=0` keeps the detected agent name alone, and `AGENT_TRANSCRIPT=0` disables the optional Claude transcript fallback.
+
+A label you set by hand, including a numeric label, is preserved. Editing an automatic pane label opts it out; `herdr pane rename <pane_id> --clear` resumes automatic naming at the next update. Ownership follows the terminal when its pane moves between tabs or workspaces.
+
+The shell hooks give immediate command-start and prompt updates. Delivered agent status and pane lifecycle events reconcile every pane. Agent tasks come from meaningful terminal titles, then independently reported title metadata, then the optional Claude transcript. A title-only change waits for the next reconcile because herdr does not deliver a title-change plugin event. The doctor action includes pane decisions for the selected tab.
+
 ## Uninstall
+
+The clear action restores number prefixes and removes unchanged plugin-owned pane labels while preserving manually edited pane labels. Run it before uninstalling:
 
 ```sh
 bash "$(herdr plugin list --json \

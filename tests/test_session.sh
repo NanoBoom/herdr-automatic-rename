@@ -208,6 +208,7 @@ check "the root store is never seeded onto itself" "nvim" \
 # prune at the end of the pass) are pinned too. Each session has its own
 # fixtures, as each server answers for its own tabs, and both number from w1:t1.
 MOCK="$here/mocks/herdr"
+export NAME_PANES=0
 export HERDR_BIN_PATH="$MOCK" HERDR_MOCK_LOG="$SB/renames.log"
 export TAB_NAME_DIRECTORY_ONLY=0
 export HERDR_AUTOMATIC_RENAME_CONFIG="$SB/none.sh"   # absent -> env toggles win

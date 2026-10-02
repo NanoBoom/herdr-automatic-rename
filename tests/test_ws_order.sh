@@ -58,6 +58,7 @@ setup() {
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-wsorder.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"
+  export NAME_PANES=0
   export HERDR_BIN_PATH="$MOCK"
   export XDG_STATE_HOME="$SB/state"
   export HERDR_AUTOMATIC_RENAME_CONFIG="$SB/none.sh"   # absent -> env toggles win

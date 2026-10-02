@@ -12,6 +12,9 @@
 # Name each tab after its project or current folder. 0 leaves tab names alone.
 # NAME_TABS=1
 
+# Name panes after the current program, prompt shell, or detected agent task.
+# NAME_PANES=1
+
 # Prefix workspaces and tabs with their 1-9 jump-key number, e.g. "[2] api". 0
 # turns numbering off. Agents get a number only on herdr below 0.7.5, because
 # newer herdr rejects a bracketed agent name.

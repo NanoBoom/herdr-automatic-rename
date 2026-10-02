@@ -8,7 +8,7 @@ version = "0.12.0"
 # runtime instead (see ar_agent_prefix_ok) and newer events are simply declared
 # below.
 min_herdr_version = "0.7.1"
-description = "Auto-name tabs after their project directory, or the current folder outside a project, and optionally prefix workspaces, tabs, and agents with their 1-9 jump-key number. Combined program, branch, and agent-title labels remain available through config.sh."
+description = "Auto-name panes after their program, shell, or agent task, and tabs after their project directory, or the current folder outside a project, and optionally prefix workspaces, tabs, and agents with their 1-9 jump-key number. Combined program, branch, and agent-title labels remain available through config.sh."
 platforms = ["linux", "macos"]
 
 # One unified reconcile handles both features, so every event runs the SAME
@@ -165,11 +165,11 @@ title = "Herdr Automatic Rename: explain this tab's name"
 contexts = ["global"]
 command = ["bash", "automatic-rename.sh", "doctor"]
 
-# Strip every "[N] " prefix (restore base names / revert agents to detection).
+# Strip every "[N] " prefix and clear unchanged plugin-owned pane labels.
 # For a clean uninstall, run the strip directly BEFORE uninstalling, so the
 # renames do not re-fire the numbering hooks (see the README's Uninstall steps).
 [[actions]]
 id = "clear"
-title = "Herdr Automatic Rename: strip all number prefixes"
+title = "Herdr Automatic Rename: clear prefixes and owned pane labels"
 contexts = ["global"]
 command = ["bash", "automatic-rename.sh", "--clear"]

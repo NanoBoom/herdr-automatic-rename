@@ -29,6 +29,7 @@ setup() {
   SB=$(mktemp -d "${TMPDIR:-/tmp}/hal-test.XXXXXX")
   export HERDR_MOCK_DIR="$SB/fixtures"; mkdir -p "$HERDR_MOCK_DIR"
   export HERDR_MOCK_LOG="$SB/renames.log"; : >"$HERDR_MOCK_LOG"; rm -f "$HERDR_MOCK_LOG.tabget"
+  export NAME_PANES=0
   export HERDR_BIN_PATH="$MOCK"
   export XDG_STATE_HOME="$SB/state"
   export HERDR_AUTOMATIC_RENAME_CONFIG="$SB/none.sh"   # absent -> env toggles win
@@ -171,7 +172,7 @@ check_contains "ws prefix stripped"    "$out" "workspace rename w1 api"
 check_contains "tab prefix stripped"   "$out" "tab rename w1:t1 zsh"
 check_contains "agent reverted"        "$out" "agent rename w1:pA --clear"
 check_contains "the clear action notifies" "$out" \
-  "notification show Number prefixes cleared --body Base names restored"
+  "notification show Prefixes and owned pane labels cleared --body Base names restored"
 teardown
 
 # ======================================================================
@@ -2284,7 +2285,7 @@ check_contains "doctor prints the record"                "$out" "enabled=true"
 check_contains "doctor prints the label"                 "$out" "label: [nvim]"
 check_contains "doctor shows a trace line about the tab" "$out" "w1:t1 owned unchanged"
 check_contains "doctor shows what the pass concluded"    "$out" "w1:t1 label already correct: [nvim]"
-check_contains "doctor prints the naming knobs"          "$out" "NAME_TABS=1 AUTO_INDEX=0"
+check_contains "doctor prints the naming knobs"          "$out" "NAME_TABS=1 NAME_PANES=0 AUTO_INDEX=0"
 check "one notification"                                 "1" "$(log | grep -c '^notification show')"
 check_contains "the notification carries the record"     "$(log)" "enabled=true"
 check "the doctor's trace file is cleaned up"            "" "$(ls "$SD"/.doctor.* 2>/dev/null)"
